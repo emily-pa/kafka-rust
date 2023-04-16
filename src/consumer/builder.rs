@@ -8,12 +8,7 @@ use super::assignment;
 use super::config::Config;
 use super::state::State;
 use super::{Consumer, DEFAULT_FALLBACK_OFFSET, DEFAULT_RETRY_MAX_BYTES_LIMIT};
-
-#[cfg(feature = "security")]
 use crate::client::SecurityConfig;
-
-#[cfg(not(feature = "security"))]
-type SecurityConfig = ();
 
 /// A Kafka Consumer builder easing the process of setting up various
 /// configuration settings.
@@ -29,7 +24,8 @@ pub struct Builder {
     fetch_max_bytes_per_partition: i32,
     retry_max_bytes_limit: i32,
     fetch_crc_validation: bool,
-    security_config: Option<SecurityConfig>,
+    verify_hostname: bool,
+    security_config: SecurityConfig,
     group_offset_storage: GroupOffsetStorage,
     conn_idle_timeout: Duration,
     client_id: Option<String>,
@@ -49,7 +45,8 @@ pub fn new(client: Option<KafkaClient>, hosts: Vec<String>) -> Builder {
         group: String::new(),
         assignments: HashMap::new(),
         fallback_offset: DEFAULT_FALLBACK_OFFSET,
-        security_config: None,
+        verify_hostname: false,
+        security_config: SecurityConfig::None,
         group_offset_storage: client::DEFAULT_GROUP_OFFSET_STORAGE,
         conn_idle_timeout: Duration::from_millis(client::DEFAULT_CONNECTION_IDLE_TIMEOUT_MILLIS),
         client_id: None,
@@ -106,9 +103,9 @@ impl Builder {
 
     /// Specifies the security config to use.
     /// See `KafkaClient::new_secure` for more info.
-    #[cfg(feature = "security")]
-    pub fn with_security(mut self, sec: SecurityConfig) -> Builder {
-        self.security_config = Some(sec);
+    pub fn with_security(mut self, sec: SecurityConfig, verify_hostname: bool) -> Builder {
+        self.security_config = sec;
+        self.verify_hostname = verify_hostname;
         self
     }
 
@@ -200,18 +197,8 @@ impl Builder {
         self
     }
 
-    #[cfg(not(feature = "security"))]
-    fn new_kafka_client(hosts: Vec<String>, _: Option<SecurityConfig>) -> KafkaClient {
-        KafkaClient::new(hosts)
-    }
-
-    #[cfg(feature = "security")]
-    fn new_kafka_client(hosts: Vec<String>, security: Option<SecurityConfig>) -> KafkaClient {
-        if let Some(security) = security {
-            KafkaClient::new_secure(hosts, security)
-        } else {
-            KafkaClient::new(hosts)
-        }
+    fn new_kafka_client(hosts: Vec<String>, verify_hostname: bool, security: SecurityConfig) -> KafkaClient {
+        KafkaClient::new_secure(hosts, verify_hostname, security)
     }
 
     /// Finally creates/builds a new consumer based on the so far
@@ -229,7 +216,7 @@ impl Builder {
         let (mut client, need_metadata) = match self.client {
             Some(client) => (client, false),
             None => (
-                Self::new_kafka_client(self.hosts, self.security_config),
+                Self::new_kafka_client(self.hosts, self.verify_hostname, self.security_config),
                 true,
             ),
         };

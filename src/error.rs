@@ -10,9 +10,17 @@ pub enum Error {
     #[error(transparent)]
     Io(#[from] io::Error),
 
-    #[cfg(feature = "security")]
+    #[cfg(feature = "security-openssl")]
     #[error(transparent)]
-    Ssl(#[from] openssl::ssl::Error),
+    Openssl(#[from] openssl::ssl::Error),
+
+    #[cfg(feature = "security-rustls")]
+    #[error(transparent)]
+    Rustls(#[from] rustls::Error),
+
+    #[cfg(feature = "security-rustls")]
+    #[error(transparent)]
+    RustlDns(#[from] rustls::client::InvalidDnsNameError),
 
     #[cfg(feature = "snappy")]
     #[error(transparent)]

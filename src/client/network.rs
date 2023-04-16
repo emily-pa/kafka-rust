@@ -4,56 +4,45 @@
 //! through re-exports of individual items from within
 //! `kafka::client`.
 
-use std::collections::HashMap;
-use std::fmt;
-use std::io::{Read, Write};
-use std::mem;
-use std::net::{Shutdown, TcpStream};
-use std::time::{Duration, Instant};
-
-#[cfg(feature = "security")]
-use openssl::ssl::SslConnector;
-
 use crate::error::Result;
+use std::{
+    collections::HashMap,
+    fmt, io,
+    io::{Read, Write},
+    mem,
+    net::{Shutdown, TcpStream},
+    sync::Arc,
+    time::{Duration, Instant, SystemTime},
+};
 
 // --------------------------------------------------------------------
 
+pub struct NoCertificateVerification {}
+
+#[cfg(feature = "security-rustls")]
+impl rustls::client::ServerCertVerifier for NoCertificateVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::Certificate,
+        _intermediates: &[rustls::Certificate],
+        _server_name: &rustls::ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp_response: &[u8],
+        _now: SystemTime,
+    ) -> std::result::Result<rustls::client::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::ServerCertVerified::assertion())
+    }
+}
+
 /// Security relevant configuration options for `KafkaClient`.
 // This will be expanded in the future. See #51.
-#[cfg(feature = "security")]
-pub struct SecurityConfig {
-    connector: SslConnector,
-    verify_hostname: bool,
-}
-
-#[cfg(feature = "security")]
-impl SecurityConfig {
-    /// In the future this will also support a kerbos via #51.
-    pub fn new(connector: SslConnector) -> Self {
-        SecurityConfig {
-            connector,
-            verify_hostname: true,
-        }
-    }
-
-    /// Initiates a client-side TLS session with/without performing hostname verification.
-    pub fn with_hostname_verification(self, verify_hostname: bool) -> SecurityConfig {
-        SecurityConfig {
-            verify_hostname,
-            ..self
-        }
-    }
-}
-
-#[cfg(feature = "security")]
-impl fmt::Debug for SecurityConfig {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "SecurityConfig {{ verify_hostname: {} }}",
-            self.verify_hostname
-        )
-    }
+#[derive(Debug, Clone)]
+pub enum SecurityConfig {
+    None,
+    #[cfg(feature = "security-openssl")]
+    Openssl(openssl::ssl::SslConnector),
+    #[cfg(feature = "security-rustls")]
+    Rustls(rustls::ClientConfig),
 }
 
 // --------------------------------------------------------------------
@@ -86,28 +75,18 @@ impl<T: fmt::Debug> fmt::Debug for Pooled<T> {
 pub struct Config {
     rw_timeout: Option<Duration>,
     idle_timeout: Duration,
-    #[cfg(feature = "security")]
-    security_config: Option<SecurityConfig>,
+    verify_hostname: bool,
+    security_config: SecurityConfig,
 }
 
 impl Config {
-    #[cfg(not(feature = "security"))]
-    fn new_conn(&self, id: u32, host: &str) -> Result<KafkaConnection> {
-        KafkaConnection::new(id, host, self.rw_timeout).map(|c| {
-            debug!("Established: {:?}", c);
-            c
-        })
-    }
-
-    #[cfg(feature = "security")]
     fn new_conn(&self, id: u32, host: &str) -> Result<KafkaConnection> {
         KafkaConnection::new(
             id,
             host,
             self.rw_timeout,
-            self.security_config
-                .as_ref()
-                .map(|c| (c.connector.clone(), c.verify_hostname)),
+            self.verify_hostname,
+            self.security_config.clone(),
         )
         .map(|c| {
             debug!("Established: {:?}", c);
@@ -141,28 +120,11 @@ pub struct Connections {
 }
 
 impl Connections {
-    #[cfg(not(feature = "security"))]
-    pub fn new(rw_timeout: Option<Duration>, idle_timeout: Duration) -> Connections {
-        Connections {
-            conns: HashMap::new(),
-            state: State::new(),
-            config: Config {
-                rw_timeout,
-                idle_timeout,
-            },
-        }
-    }
-
-    #[cfg(feature = "security")]
-    pub fn new(rw_timeout: Option<Duration>, idle_timeout: Duration) -> Connections {
-        Self::new_with_security(rw_timeout, idle_timeout, None)
-    }
-
-    #[cfg(feature = "security")]
-    pub fn new_with_security(
+    pub fn new(
         rw_timeout: Option<Duration>,
         idle_timeout: Duration,
-        security: Option<SecurityConfig>,
+        verify_hostname: bool,
+        security_config: SecurityConfig,
     ) -> Connections {
         Connections {
             conns: HashMap::new(),
@@ -170,7 +132,8 @@ impl Connections {
             config: Config {
                 rw_timeout,
                 idle_timeout,
-                security_config: security,
+                verify_hostname,
+                security_config,
             },
         }
     }
@@ -183,7 +146,7 @@ impl Connections {
         self.config.idle_timeout
     }
 
-    pub fn get_conn<'a>(&'a mut self, host: &str, now: Instant) -> Result<&'a mut KafkaConnection> {
+    pub fn get_conn(&mut self, host: &str, now: Instant) -> Result<&mut KafkaConnection> {
         if let Some(conn) = self.conns.get_mut(host) {
             if now.duration_since(conn.last_checkout) >= self.config.idle_timeout {
                 debug!("Idle timeout reached: {:?}", conn.item);
@@ -238,82 +201,73 @@ trait IsSecured {
     fn is_secured(&self) -> bool;
 }
 
-#[cfg(not(feature = "security"))]
-type KafkaStream = TcpStream;
+pub enum KafkaStream {
+    Plain(TcpStream),
+    #[cfg(feature = "security-openssl")]
+    Openssl(openssl::ssl::SslStream<TcpStream>),
+    #[cfg(feature = "security-rustls")]
+    Rustls(rustls::StreamOwned<rustls::ClientConnection, TcpStream>),
+}
 
-#[cfg(not(feature = "security"))]
 impl IsSecured for KafkaStream {
     fn is_secured(&self) -> bool {
-        false
+        !matches!(self, KafkaStream::Plain(_))
     }
 }
 
-#[cfg(feature = "security")]
-use self::openssled::KafkaStream;
-
-#[cfg(feature = "security")]
-mod openssled {
-    use std::io::{self, Read, Write};
-    use std::net::{Shutdown, TcpStream};
-    use std::time::Duration;
-
-    use openssl::ssl::SslStream;
-
-    use super::IsSecured;
-
-    pub enum KafkaStream {
-        Plain(TcpStream),
-        Ssl(SslStream<TcpStream>),
-    }
-
-    impl IsSecured for KafkaStream {
-        fn is_secured(&self) -> bool {
-            matches!(self, KafkaStream::Ssl(_))
+impl KafkaStream {
+    fn get_ref(&self) -> &TcpStream {
+        match *self {
+            KafkaStream::Plain(ref s) => s,
+            #[cfg(feature = "security-openssl")]
+            KafkaStream::Openssl(ref s) => s.get_ref(),
+            #[cfg(feature = "security-rustls")]
+            KafkaStream::Rustls(ref s) => s.get_ref(),
         }
     }
 
-    impl KafkaStream {
-        fn get_ref(&self) -> &TcpStream {
-            match *self {
-                KafkaStream::Plain(ref s) => s,
-                KafkaStream::Ssl(ref s) => s.get_ref(),
-            }
-        }
-
-        pub fn set_read_timeout(&self, dur: Option<Duration>) -> io::Result<()> {
-            self.get_ref().set_read_timeout(dur)
-        }
-
-        pub fn set_write_timeout(&self, dur: Option<Duration>) -> io::Result<()> {
-            self.get_ref().set_write_timeout(dur)
-        }
-
-        pub fn shutdown(&mut self, how: Shutdown) -> io::Result<()> {
-            self.get_ref().shutdown(how)
-        }
+    pub fn set_read_timeout(&self, dur: Option<Duration>) -> io::Result<()> {
+        self.get_ref().set_read_timeout(dur)
     }
 
-    impl Read for KafkaStream {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            match *self {
-                KafkaStream::Plain(ref mut s) => s.read(buf),
-                KafkaStream::Ssl(ref mut s) => s.read(buf),
-            }
-        }
+    pub fn set_write_timeout(&self, dur: Option<Duration>) -> io::Result<()> {
+        self.get_ref().set_write_timeout(dur)
     }
 
-    impl Write for KafkaStream {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            match *self {
-                KafkaStream::Plain(ref mut s) => s.write(buf),
-                KafkaStream::Ssl(ref mut s) => s.write(buf),
-            }
+    pub fn shutdown(&mut self, how: Shutdown) -> io::Result<()> {
+        self.get_ref().shutdown(how)
+    }
+}
+
+impl Read for KafkaStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match *self {
+            KafkaStream::Plain(ref mut s) => s.read(buf),
+            #[cfg(feature = "security-openssl")]
+            KafkaStream::Openssl(ref mut s) => s.read(buf),
+            #[cfg(feature = "security-rustls")]
+            KafkaStream::Rustls(ref mut s) => s.read(buf),
         }
-        fn flush(&mut self) -> io::Result<()> {
-            match *self {
-                KafkaStream::Plain(ref mut s) => s.flush(),
-                KafkaStream::Ssl(ref mut s) => s.flush(),
-            }
+    }
+}
+
+impl Write for KafkaStream {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match *self {
+            KafkaStream::Plain(ref mut s) => s.write(buf),
+            #[cfg(feature = "security-openssl")]
+            KafkaStream::Openssl(ref mut s) => s.write(buf),
+            #[cfg(feature = "security-rustls")]
+            KafkaStream::Rustls(ref mut s) => s.write(buf),
+        }
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        match *self {
+            KafkaStream::Plain(ref mut s) => s.flush(),
+            #[cfg(feature = "security-openssl")]
+            KafkaStream::Openssl(ref mut s) => s.flush(),
+            #[cfg(feature = "security-rustls")]
+            KafkaStream::Rustls(ref mut s) => s.flush(),
         }
     }
 }
@@ -381,33 +335,30 @@ impl KafkaConnection {
         })
     }
 
-    #[cfg(not(feature = "security"))]
-    fn new(id: u32, host: &str, rw_timeout: Option<Duration>) -> Result<KafkaConnection> {
-        KafkaConnection::from_stream(TcpStream::connect(host)?, id, host, rw_timeout)
-    }
-
-    #[cfg(feature = "security")]
     fn new(
         id: u32,
         host: &str,
         rw_timeout: Option<Duration>,
-        security: Option<(SslConnector, bool)>,
+        verify_hostname: bool,
+        security_config: SecurityConfig,
     ) -> Result<KafkaConnection> {
         use crate::Error;
 
+        let domain = match host.rfind(':') {
+            None => host,
+            Some(i) => &host[..i],
+        };
         let stream = TcpStream::connect(host)?;
-        let stream = match security {
-            Some((connector, verify_hostname)) => {
+        let stream = match security_config {
+            SecurityConfig::None => KafkaStream::Plain(stream),
+            #[cfg(feature = "security-openssl")]
+            SecurityConfig::Openssl(connector) => {
                 if !verify_hostname {
                     connector
                         .configure()
                         .map_err(openssl::ssl::Error::from)?
                         .set_verify_hostname(false);
                 }
-                let domain = match host.rfind(':') {
-                    None => host,
-                    Some(i) => &host[..i],
-                };
                 let connection = connector.connect(domain, stream).map_err(|err| match err {
                     openssl::ssl::HandshakeError::SetupFailure(err) => {
                         Error::from(openssl::ssl::Error::from(err))
@@ -415,9 +366,22 @@ impl KafkaConnection {
                     openssl::ssl::HandshakeError::Failure(err) => Error::from(err.into_error()),
                     openssl::ssl::HandshakeError::WouldBlock(err) => Error::from(err.into_error()),
                 })?;
-                KafkaStream::Ssl(connection)
+                KafkaStream::Openssl(connection)
             }
-            None => KafkaStream::Plain(stream),
+            #[cfg(feature = "security-rustls")]
+            SecurityConfig::Rustls(mut client_config) => {
+                if !verify_hostname {
+                    client_config
+                        .dangerous()
+                        .set_certificate_verifier(Arc::new(NoCertificateVerification {}));
+                }
+                let conn = rustls::ClientConnection::new(
+                    client_config.into(),
+                    domain.try_into().map_err(|err| Error::from(err))?,
+                )
+                .map_err(|err| Error::from(err))?;
+                KafkaStream::Rustls(rustls::StreamOwned::new(conn, stream))
+            }
         };
         KafkaConnection::from_stream(stream, id, host, rw_timeout)
     }

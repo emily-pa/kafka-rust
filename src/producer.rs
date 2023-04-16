@@ -68,11 +68,7 @@ use std::slice::from_ref;
 use std::time::Duration;
 use twox_hash::XxHash32;
 
-#[cfg(feature = "security")]
 use crate::client::SecurityConfig;
-
-#[cfg(not(feature = "security"))]
-type SecurityConfig = ();
 use crate::client_internals::KafkaClientInternals;
 use crate::protocol;
 
@@ -353,7 +349,8 @@ pub struct Builder<P = DefaultPartitioner> {
     conn_idle_timeout: Duration,
     required_acks: RequiredAcks,
     partitioner: P,
-    security_config: Option<SecurityConfig>,
+    verify_hostname: bool,
+    security_config: SecurityConfig,
     client_id: Option<String>,
 }
 
@@ -369,7 +366,8 @@ impl Builder {
             ),
             required_acks: DEFAULT_REQUIRED_ACKS,
             partitioner: DefaultPartitioner::default(),
-            security_config: None,
+            verify_hostname: false,
+            security_config: SecurityConfig::None,
             client_id: None,
         };
         if let Some(ref c) = b.client {
@@ -381,9 +379,9 @@ impl Builder {
 
     /// Specifies the security config to use.
     /// See `KafkaClient::new_secure` for more info.
-    #[cfg(feature = "security")]
-    pub fn with_security(mut self, security: SecurityConfig) -> Self {
-        self.security_config = Some(security);
+    pub fn with_security(mut self, security: SecurityConfig, verify_hostname: bool) -> Self {
+        self.security_config = security;
+        self.verify_hostname = verify_hostname;
         self
     }
 
@@ -440,23 +438,14 @@ impl<P> Builder<P> {
             conn_idle_timeout: self.conn_idle_timeout,
             required_acks: self.required_acks,
             partitioner,
-            security_config: None,
+            verify_hostname: self.verify_hostname,
+            security_config: self.security_config,
             client_id: None,
         }
     }
 
-    #[cfg(not(feature = "security"))]
-    fn new_kafka_client(hosts: Vec<String>, _: Option<SecurityConfig>) -> KafkaClient {
-        KafkaClient::new(hosts)
-    }
-
-    #[cfg(feature = "security")]
-    fn new_kafka_client(hosts: Vec<String>, security: Option<SecurityConfig>) -> KafkaClient {
-        if let Some(security) = security {
-            KafkaClient::new_secure(hosts, security)
-        } else {
-            KafkaClient::new(hosts)
-        }
+    fn new_kafka_client(hosts: Vec<String>, verify_hostname: bool, security: SecurityConfig) -> KafkaClient {
+        KafkaClient::new_secure(hosts, verify_hostname, security)
     }
 
     /// Finally creates/builds a new producer based on the so far
@@ -466,7 +455,7 @@ impl<P> Builder<P> {
         let (mut client, need_metadata) = match self.client {
             Some(client) => (client, false),
             None => (
-                Self::new_kafka_client(self.hosts, self.security_config),
+                Self::new_kafka_client(self.hosts, self.verify_hostname,self.security_config),
                 true,
             ),
         };

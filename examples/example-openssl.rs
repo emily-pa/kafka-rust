@@ -5,7 +5,7 @@ fn main() {
     example::main();
 }
 
-#[cfg(feature = "security")]
+#[cfg(feature = "security-openssl")]
 mod example {
     use kafka;
     use openssl;
@@ -62,7 +62,8 @@ mod example {
         // ~ instantiate KafkaClient with the previous OpenSSL setup
         let mut client = KafkaClient::new_secure(
             cfg.brokers,
-            SecurityConfig::new(connector).with_hostname_verification(cfg.verify_hostname),
+            cfg.verify_hostname,
+            SecurityConfig::Openssl(connector),
         );
 
         // ~ communicate with the brokers
@@ -173,12 +174,12 @@ mod example {
     }
 }
 
-#[cfg(not(feature = "security"))]
+#[cfg(not(feature = "security-openssl"))]
 mod example {
     use std::process;
 
     pub fn main() {
-        println!("example relevant only with the \"security\" feature enabled!");
+        println!("example relevant only with the \"security-openssl\" feature enabled!");
         process::exit(1);
     }
 }
