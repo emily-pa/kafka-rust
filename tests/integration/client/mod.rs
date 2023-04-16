@@ -36,7 +36,7 @@ fn test_kafka_client_load_metadata() {
     let mut client = new_kafka_client();
     let client_id = "test-id".to_string();
     client.set_client_id(client_id.clone());
-    client.load_metadata_all(); // why unwrap??
+    client.load_metadata_all().ok();
 
     let topics = client.topics();
 
@@ -173,7 +173,9 @@ fn test_commit_offset() {
         (TEST_TOPIC_PARTITIONS[0], 500),
         (TEST_TOPIC_PARTITIONS[1], 600),
     ] {
-        client.commit_offset(TEST_GROUP_NAME, TEST_TOPIC_NAME, partition, offset);
+        client
+            .commit_offset(TEST_GROUP_NAME, TEST_TOPIC_NAME, partition, offset)
+            .ok();
 
         let partition_offsets: HashSet<PartitionOffset> = client
             .fetch_group_topic_offsets(TEST_GROUP_NAME, TEST_TOPIC_NAME)
@@ -231,7 +233,7 @@ fn test_commit_offsets() {
     ];
 
     for commit_pair in &commits {
-        client.commit_offsets(TEST_GROUP_NAME, commit_pair); // why unwrap ??
+        client.commit_offsets(TEST_GROUP_NAME, commit_pair).ok();
 
         let partition_offsets: HashSet<PartitionOffset> = client
             .fetch_group_topic_offsets(TEST_GROUP_NAME, TEST_TOPIC_NAME)

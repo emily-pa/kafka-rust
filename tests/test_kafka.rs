@@ -20,16 +20,12 @@ extern crate lazy_static;
 
 #[cfg(feature = "integration_tests")]
 mod integration {
-    use std;
-    use std::collections::HashMap;
-
     use kafka::client::{Compression, GroupOffsetStorage, KafkaClient, SecurityConfig};
-
-    use openssl;
-    use openssl::pkey::PKey;
-    use openssl::rsa::Rsa;
-    use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
-    use openssl::x509::X509;
+    use kafka::Error;
+    use std::{collections::HashMap, sync::Arc};
+    use x509_certificate::{
+        CapturedX509Certificate, InMemorySigningKeyPair, KeyAlgorithm, Sign, X509CertificateBuilder,
+    };
 
     mod client;
     mod consumer_producer;
@@ -68,7 +64,7 @@ mod integration {
     /// its metadata so it is ready to use.
     pub(crate) fn new_ready_kafka_client() -> KafkaClient {
         let mut client = new_kafka_client();
-        client.load_metadata_all();
+        client.load_metadata_all().ok();
         client
     }
 
@@ -76,11 +72,13 @@ mod integration {
     pub(crate) fn new_kafka_client() -> KafkaClient {
         let hosts = vec![LOCAL_KAFKA_BOOTSTRAP_HOST.to_owned()];
 
-        let mut client = if let Some(security_config) = new_security_config() {
-            KafkaClient::new_secure(hosts, security_config.unwrap())
-        } else {
-            KafkaClient::new(hosts)
-        };
+        let mut client = KafkaClient::new_secure(
+            hosts,
+            false,
+            new_security_config()
+                .map(|exists| exists.expect("Could not load security configuration"))
+                .unwrap_or(SecurityConfig::None),
+        );
 
         client.set_group_offset_storage(GroupOffsetStorage::Kafka);
 
@@ -95,22 +93,68 @@ mod integration {
 
     /// Returns a new security config if the `KAFKA_CLIENT_SECURE`
     /// environment variable is set to a non-empty string.
-    pub(crate) fn new_security_config() -> Option<Result<SecurityConfig, openssl::error::ErrorStack>>
-    {
-        match std::env::var_os(KAFKA_CLIENT_SECURE) {
-            Some(ref val) if val.as_os_str() != "" => (),
-            _ => return None,
+    pub(crate) fn new_security_config() -> Option<Result<SecurityConfig, kafka::Error>> {
+        #[cfg(all(not(feature = "security-openssl"), not(feature = "security-rustls")))]
+        {
+            return None;
         }
 
-        Some(new_key_pair().and_then(get_security_config))
+        match std::env::var_os(KAFKA_CLIENT_SECURE) {
+            Some(ref val) => {
+                if val == "OPENSSL" {
+                    Some(new_key_pair_openssl().and_then(get_security_config_openssl))
+                } else if val == "RUSTLS" {
+                    Some(get_security_config_rustls(new_key_pair_rustls()))
+                } else {
+                    return None;
+                }
+            }
+            _ => return None,
+        }
     }
 
-    /// If the `KAFKA_CLIENT_SECURE` environment variable is set, return a
+    #[cfg(feature = "security-rustls")]
+    pub(crate) fn get_security_config_rustls(
+        (certificate, keypair): (CapturedX509Certificate, InMemorySigningKeyPair),
+    ) -> Result<SecurityConfig, kafka::Error> {
+        let mut root_store = rustls::RootCertStore::empty();
+        root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+            rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                ta.subject,
+                ta.spki,
+                ta.name_constraints,
+            )
+        }));
+
+        let client_config = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_custom_certificate_verifier(Arc::new(rustls::client::WebPkiVerifier::new(
+                root_store, None,
+            )))
+            .with_single_cert(
+                vec![rustls::Certificate(certificate.encode_der().unwrap())],
+                rustls::PrivateKey(keypair.private_key_data().unwrap()),
+            )
+            .unwrap();
+        Ok(SecurityConfig::Rustls(client_config))
+    }
+
+    #[cfg(feature = "security-rustls")]
+    pub(crate) fn new_key_pair_rustls() -> (CapturedX509Certificate, InMemorySigningKeyPair) {
+        let (cert, key, _) = X509CertificateBuilder::new(KeyAlgorithm::Rsa)
+            .create_with_random_keypair()
+            .unwrap();
+        (cert, key)
+    }
+
+    /// If the `KAFKA_CLIENT_SECURE` environment variable is set to OPENSSL, return a
     /// `SecurityConfig`.
-    pub(crate) fn get_security_config(
+    #[cfg(feature = "security-openssl")]
+    pub(crate) fn get_security_config_openssl(
         keypair: openssl::x509::X509,
-    ) -> Result<SecurityConfig, openssl::error::ErrorStack> {
-        let mut builder = SslConnector::builder(SslMethod::tls()).unwrap();
+    ) -> Result<SecurityConfig, kafka::Error> {
+        let mut builder =
+            openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls()).unwrap();
 
         #[cfg(openssl110)]
         builder.set_cipher_list("DEFAULT@SECLEVEL=0").unwrap();
@@ -119,18 +163,23 @@ mod integration {
         builder.set_cipher_list("DEFAULT").unwrap();
 
         builder.set_certificate(&*keypair).unwrap();
-        builder.set_verify(SslVerifyMode::NONE);
+        builder.set_verify(openssl::ssl::SslVerifyMode::NONE);
 
         let connector = builder.build();
-        let security_config = SecurityConfig::new(connector);
-        Ok(security_config.with_hostname_verification(false))
+        let security_config = SecurityConfig::Openssl(connector);
+        Ok(security_config)
     }
 
-    pub(crate) fn new_key_pair() -> Result<X509, openssl::error::ErrorStack> {
-        let rsa = Rsa::generate(RSA_KEY_SIZE)?;
-        let pkey = PKey::from_rsa(rsa)?;
-        let mut builder = X509::builder()?;
-        builder.set_pubkey(&*pkey)?;
+    #[cfg(feature = "security-openssl")]
+    pub(crate) fn new_key_pair_openssl() -> Result<openssl::x509::X509, Error> {
+        let rsa =
+            openssl::rsa::Rsa::generate(RSA_KEY_SIZE).map_err(|err| Error::Openssl(err.into()))?;
+        let pkey = openssl::pkey::PKey::from_rsa(rsa).map_err(|err| Error::Openssl(err.into()))?;
+        let mut builder =
+            openssl::x509::X509::builder().map_err(|err| Error::Openssl(err.into()))?;
+        builder
+            .set_pubkey(&*pkey)
+            .map_err(|err| Error::Openssl(err.into()))?;
         Ok(builder.build())
     }
 }
