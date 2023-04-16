@@ -14,9 +14,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 // pub re-export
+pub use self::network::SecurityConfig;
 pub use crate::compression::Compression;
 pub use crate::utils::PartitionOffset;
-pub use self::network::SecurityConfig;
 
 use crate::codecs::{FromByte, ToByte};
 use crate::error::{Error, KafkaCode, Result};
@@ -401,7 +401,7 @@ impl KafkaClient {
     ///     builder.set_verify(SslVerifyMode::PEER);
     ///     let connector = builder.build();
     ///
-    ///     let mut client = KafkaClient::new_secure(vec!("localhost:9092".to_owned()),
+    ///     let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()),
     ///                                              SecurityConfig::new(connector));
     ///     client.load_metadata_all().unwrap();
     /// }
@@ -414,7 +414,7 @@ impl KafkaClient {
     /// and [openssl_verify](https://crates.io/crates/openssl-verify),
     /// as well as
     /// [Kafka's documentation](https://kafka.apache.org/documentation.html#security_ssl).
-    pub fn new_secure(hosts: Vec<String>, verify_hostname: bool, security: SecurityConfig) -> KafkaClient {
+    pub fn new(hosts: Vec<String>, verify_hostname: bool, security: SecurityConfig) -> KafkaClient {
         KafkaClient {
             config: ClientConfig {
                 client_id: String::new(),

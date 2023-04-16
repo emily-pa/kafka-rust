@@ -444,8 +444,12 @@ impl<P> Builder<P> {
         }
     }
 
-    fn new_kafka_client(hosts: Vec<String>, verify_hostname: bool, security: SecurityConfig) -> KafkaClient {
-        KafkaClient::new_secure(hosts, verify_hostname, security)
+    fn new_kafka_client(
+        hosts: Vec<String>,
+        verify_hostname: bool,
+        security: SecurityConfig,
+    ) -> KafkaClient {
+        KafkaClient::new(hosts, verify_hostname, security)
     }
 
     /// Finally creates/builds a new producer based on the so far
@@ -455,7 +459,7 @@ impl<P> Builder<P> {
         let (mut client, need_metadata) = match self.client {
             Some(client) => (client, false),
             None => (
-                Self::new_kafka_client(self.hosts, self.verify_hostname,self.security_config),
+                Self::new_kafka_client(self.hosts, self.verify_hostname, self.security_config),
                 true,
             ),
         };

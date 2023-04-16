@@ -197,8 +197,12 @@ impl Builder {
         self
     }
 
-    fn new_kafka_client(hosts: Vec<String>, verify_hostname: bool, security: SecurityConfig) -> KafkaClient {
-        KafkaClient::new_secure(hosts, verify_hostname, security)
+    fn new_kafka_client(
+        hosts: Vec<String>,
+        verify_hostname: bool,
+        security: SecurityConfig,
+    ) -> KafkaClient {
+        KafkaClient::new(hosts, verify_hostname, security)
     }
 
     /// Finally creates/builds a new consumer based on the so far
