@@ -72,7 +72,7 @@ mod integration {
     pub(crate) fn new_kafka_client() -> KafkaClient {
         let hosts = vec![LOCAL_KAFKA_BOOTSTRAP_HOST.to_owned()];
 
-        let mut client = KafkaClient::new_secure(
+        let mut client = KafkaClient::new(
             hosts,
             false,
             new_security_config()

@@ -95,7 +95,7 @@ mod example {
         };
 
         // ~ instantiate KafkaClient with the previous OpenSSL setup
-        let mut client = KafkaClient::new_secure(
+        let mut client = KafkaClient::new(
             cfg.brokers,
             cfg.verify_hostname,
             SecurityConfig::Rustls(rustls_config),

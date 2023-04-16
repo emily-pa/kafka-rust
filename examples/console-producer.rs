@@ -10,7 +10,7 @@ use anyhow::anyhow;
 use kafka::Error;
 
 use kafka::client::{
-    Compression, KafkaClient, RequiredAcks, DEFAULT_CONNECTION_IDLE_TIMEOUT_MILLIS,
+    Compression, KafkaClient, RequiredAcks, SecurityConfig, DEFAULT_CONNECTION_IDLE_TIMEOUT_MILLIS,
 };
 use kafka::producer::{AsBytes, Producer, Record, DEFAULT_ACK_TIMEOUT_MILLIS};
 
@@ -37,7 +37,7 @@ fn main() {
 }
 
 fn produce(cfg: &Config) -> Result<()> {
-    let mut client = KafkaClient::new(cfg.brokers.clone());
+    let mut client = KafkaClient::new(cfg.brokers.clone(), false, SecurityConfig::None);
     client.set_client_id("kafka-rust-console-producer".into());
     client.load_metadata_all()?;
 

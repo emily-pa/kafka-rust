@@ -1,15 +1,11 @@
-#[macro_use]
-use std::cmp;
-use std::env;
-use std::io::{self, stderr, stdout, BufWriter, Write};
-use std::process;
-use std::thread;
-//use std::time as stdtime;
-use std::time::Duration;
-use std::time::SystemTime;
-
 use anyhow::{anyhow, Error, Result};
-use kafka::client::{FetchOffset, GroupOffsetStorage, KafkaClient};
+use kafka::client::{FetchOffset, GroupOffsetStorage, KafkaClient, SecurityConfig};
+use std::{
+    cmp, env,
+    io::{stderr, stdout, BufWriter, Write},
+    process, thread, time,
+    time::{Duration, SystemTime},
+};
 
 /// A very simple offset monitor for a particular topic able to show
 /// the lag for a particular consumer group. Dumps the offset/lag of
@@ -37,7 +33,7 @@ fn main() {
 }
 
 fn run(cfg: Config) -> Result<()> {
-    let mut client = KafkaClient::new(cfg.brokers.clone());
+    let mut client = KafkaClient::new(cfg.brokers.clone(), false, SecurityConfig::None);
     client.set_group_offset_storage(cfg.offset_storage);
     client.load_metadata_all()?;
 

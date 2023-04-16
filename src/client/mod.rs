@@ -401,7 +401,7 @@ impl KafkaClient {
     ///     builder.set_verify(SslVerifyMode::PEER);
     ///     let connector = builder.build();
     ///
-    ///     let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()),
+    ///     let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()), true,
     ///                                              SecurityConfig::new(connector));
     ///     client.load_metadata_all().unwrap();
     /// }
@@ -472,7 +472,7 @@ impl KafkaClient {
     /// ```no_run
     /// use kafka::client::{Compression, KafkaClient};
     ///
-    /// let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()));
+    /// let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()), false, SecurityConfig::None);
     /// client.load_metadata_all().unwrap();
     /// client.set_compression(Compression::NONE);
     /// ```
@@ -522,9 +522,9 @@ impl KafkaClient {
     /// use std::time::Duration;
     /// use kafka::client::{KafkaClient, FetchPartition};
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()]);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SecurityConfig::None);
     /// client.load_metadata_all().unwrap();
-    /// client.set_fetch_max_wait_time(Duration::from_millis(100));
+    /// client.set_fetch_max_wait_time(Duration::from_millis(100)).ok();
     /// client.set_fetch_min_bytes(64 * 1024);
     /// let r = client.fetch_messages(&[FetchPartition::new("my-topic", 0, 0)]);
     /// ```
@@ -680,7 +680,7 @@ impl KafkaClient {
     /// use kafka::client::KafkaClient;
     /// use kafka::client::metadata::Broker;
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()]);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SecurityConfig::None);
     /// client.load_metadata_all().unwrap();
     /// for topic in client.topics() {
     ///   for partition in topic.partitions() {
@@ -702,7 +702,7 @@ impl KafkaClient {
     /// # Examples
     ///
     /// ```no_run
-    /// let mut client = kafka::client::KafkaClient::new(vec!("localhost:9092".to_owned()));
+    /// let mut client = kafka::client::KafkaClient::new(vec!("localhost:9092".to_owned()), false, SecurityConfig::None);
     /// client.load_metadata_all().unwrap();
     /// for topic in client.topics().names() {
     ///   println!("topic: {}", topic);
@@ -733,7 +733,7 @@ impl KafkaClient {
     /// # Examples
     ///
     /// ```no_run
-    /// let mut client = kafka::client::KafkaClient::new(vec!("localhost:9092".to_owned()));
+    /// let mut client = kafka::client::KafkaClient::new(vec!("localhost:9092".to_owned()), false, SecurityConfig::None);
     /// let _ = client.load_metadata(&["my-topic"]).unwrap();
     /// ```
     ///
@@ -791,7 +791,7 @@ impl KafkaClient {
     /// ```no_run
     /// use kafka::client::KafkaClient;
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()]);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SecurityConfig::None);
     /// client.load_metadata_all().unwrap();
     /// let topics: Vec<String> = client.topics().names().map(ToOwned::to_owned).collect();
     /// let offsets = client.fetch_offsets(&topics, kafka::client::FetchOffset::Latest).unwrap();
@@ -897,7 +897,7 @@ impl KafkaClient {
     /// ```no_run
     /// use kafka::client::{KafkaClient, FetchOffset};
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()]);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SecurityConfig::None);
     /// client.load_metadata_all().unwrap();
     /// let offsets = client.fetch_topic_offsets("my-topic", FetchOffset::Latest).unwrap();
     /// ```
@@ -1096,7 +1096,7 @@ impl KafkaClient {
     /// ```no_run
     /// use kafka::client::{KafkaClient, CommitOffset};
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()]);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SecurityConfig::None);
     /// client.load_metadata_all().unwrap();
     /// client.commit_offsets("my-group",
     ///     &[CommitOffset::new("my-topic", 0, 100),
@@ -1145,7 +1145,7 @@ impl KafkaClient {
     /// ```no_run
     /// use kafka::client::KafkaClient;
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()]);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SecurityConfig::None);
     /// client.load_metadata_all().unwrap();
     /// client.commit_offset("my-group", "my-topic", 0, 100).unwrap();
     /// ```
@@ -1168,7 +1168,7 @@ impl KafkaClient {
     /// ```no_run
     /// use kafka::client::{KafkaClient, FetchGroupOffset};
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()]);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SecurityConfig::None);
     /// client.load_metadata_all().unwrap();
     ///
     /// let offsets =
@@ -1212,7 +1212,7 @@ impl KafkaClient {
     /// ```no_run
     /// use kafka::client::KafkaClient;
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()]);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SecurityConfig::None);
     /// client.load_metadata_all().unwrap();
     /// let offsets = client.fetch_group_topic_offsets("my-group", "my-topic").unwrap();
     /// ```
