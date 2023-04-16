@@ -1,10 +1,5 @@
-use std::cmp;
-use std::collections::HashMap;
-use std::env;
-use std::io;
-use std::process;
-
-use kafka::client::{FetchOffset, KafkaClient};
+use kafka::client::{FetchOffset, KafkaClient, SecurityConfig};
+use std::{cmp, collections::HashMap, env, io, process};
 
 /// Dumps available topic metadata to stdout.
 fn main() {

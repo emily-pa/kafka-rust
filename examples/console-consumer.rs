@@ -55,12 +55,12 @@ fn process(cfg: Config) -> Result<(), &'static str> {
                 buf.extend_from_slice(m.value);
                 buf.push(b'\n');
                 // ~ write to output channel
-                stdout.write_all(&buf);
+                stdout.write_all(&buf).ok();
             }
             let _ = c.consume_messageset(ms);
         }
         if do_commit {
-            c.commit_consumed();
+            c.commit_consumed().ok();
         }
     }
 }

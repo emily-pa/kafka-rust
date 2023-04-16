@@ -3,7 +3,7 @@ use kafka::client::{FetchOffset, GroupOffsetStorage, KafkaClient, SecurityConfig
 use std::{
     cmp, env,
     io::{stderr, stdout, BufWriter, Write},
-    process, thread, time,
+    process, thread,
     time::{Duration, SystemTime},
 };
 
@@ -155,7 +155,7 @@ impl State {
 struct Printer<W> {
     out: W,
 
-    timefmt: String,
+    _timefmt: String,
     fmt_buf: String,
     out_buf: String,
 
@@ -173,7 +173,7 @@ impl<W: Write> Printer<W> {
     fn new(out: W, cfg: &Config) -> Printer<W> {
         Printer {
             out,
-            timefmt: "%H:%M:%S".into(),
+            _timefmt: "%H:%M:%S".into(),
             fmt_buf: String::with_capacity(30),
             out_buf: String::with_capacity(160),
             time_width: 10,

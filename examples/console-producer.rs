@@ -1,13 +1,13 @@
 use anyhow::{ensure, Result};
 use std::fs::File;
-use std::io::{self, stderr, stdin, BufRead, BufReader, Write};
+use std::io::{stderr, stdin, BufRead, BufReader, Write};
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::time::Duration;
 use std::{env, process};
 
 use anyhow::anyhow;
-use kafka::Error;
+
 
 use kafka::client::{
     Compression, KafkaClient, RequiredAcks, SecurityConfig, DEFAULT_CONNECTION_IDLE_TIMEOUT_MILLIS,
