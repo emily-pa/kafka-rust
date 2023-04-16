@@ -743,7 +743,8 @@ impl KafkaClient {
     #[inline]
     pub fn load_metadata<T: AsRef<str>>(&mut self, topics: &[T]) -> Result<()> {
         let resp = self.fetch_metadata(topics)?;
-        self.state.update_metadata(resp)
+        self.state.update_metadata(resp);
+        Ok(())
     }
 
     /// Clears metadata stored in the client.  You must load metadata
@@ -849,7 +850,9 @@ impl KafkaClient {
                         hash_map::Entry::Occupied(ref mut e) => e.get_mut(),
                         hash_map::Entry::Vacant(_) => {
                             new_resp_offsets = Some(Vec::new());
-                            new_resp_offsets.as_mut().unwrap()
+                            new_resp_offsets
+                                .as_mut()
+                                .expect("Failed getting mutable reference for response")
                         }
                     };
                     for p in tp.partitions {
@@ -1030,11 +1033,11 @@ impl KafkaClient {
     /// Fetch messages from a single kafka partition.
     ///
     /// See `KafkaClient::fetch_messages`.
-    pub fn fetch_messages_for_partition<'a>(
+    pub fn fetch_messages_for_partition(
         &mut self,
-        req: &FetchPartition<'a>,
+        req: &FetchPartition,
     ) -> Result<Vec<fetch::Response>> {
-        self.fetch_messages(&[req])
+        self.fetch_messages([req])
     }
 
     /// Send a message to Kafka

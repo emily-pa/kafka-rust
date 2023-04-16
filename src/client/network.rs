@@ -206,7 +206,7 @@ pub enum KafkaStream {
     #[cfg(feature = "security-openssl")]
     Openssl(openssl::ssl::SslStream<TcpStream>),
     #[cfg(feature = "security-rustls")]
-    Rustls(rustls::StreamOwned<rustls::ClientConnection, TcpStream>),
+    Rustls(Box<rustls::StreamOwned<rustls::ClientConnection, TcpStream>>),
 }
 
 impl IsSecured for KafkaStream {
@@ -303,7 +303,7 @@ impl KafkaConnection {
     }
 
     pub fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
-        let r = (&mut self.stream).read_exact(buf).map_err(From::from);
+        let r = (self.stream).read_exact(buf).map_err(From::from);
         trace!("Read {} bytes from: {:?} => {:?}", buf.len(), self, r);
         r
     }
@@ -377,10 +377,10 @@ impl KafkaConnection {
                 }
                 let conn = rustls::ClientConnection::new(
                     client_config.into(),
-                    domain.try_into().map_err(|err| Error::from(err))?,
+                    domain.try_into().map_err(Error::from)?,
                 )
-                .map_err(|err| Error::from(err))?;
-                KafkaStream::Rustls(rustls::StreamOwned::new(conn, stream))
+                .map_err(Error::from)?;
+                KafkaStream::Rustls(Box::new(rustls::StreamOwned::new(conn, stream)))
             }
         };
         KafkaConnection::from_stream(stream, id, host, rw_timeout)
