@@ -636,12 +636,12 @@ mod tests {
     fn test_loading_metadata() {
         let mut state = ClientState::new();
         // Test loading metadata into a new, empty client state.
-        state.update_metadata(metadata_response_initial()).unwrap();
+        state.update_metadata(metadata_response_initial());
         assert_initial_metadata_load(&state);
 
         // Test loading a metadata update into a client state with
         // already some initial metadata loaded.
-        state.update_metadata(metadata_response_update()).unwrap();
+        state.update_metadata(metadata_response_update());
         assert_updated_metadata_load(&state);
     }
 }
