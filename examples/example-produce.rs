@@ -1,3 +1,4 @@
+use log::Level;
 use std::time::Duration;
 
 use kafka::error::Error as KafkaError;
@@ -7,7 +8,7 @@ use kafka::producer::{Producer, Record, RequiredAcks};
 /// `Producer`.  This is a convenient higher-level client that will
 /// fit most use cases.
 fn main() {
-    env_logger::init();
+    simple_logger::init_with_level(Level::Debug).unwrap();
 
     let broker = "localhost:9092";
     let topic = "my-topic";

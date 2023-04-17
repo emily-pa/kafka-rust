@@ -1,29 +1,25 @@
-extern crate log;
-
 fn main() {
     example::main();
 }
 
 #[cfg(feature = "security-openssl")]
 mod example {
-    use kafka;
-    use openssl;
-
-    use std::env;
-    use std::process;
-
-    use self::kafka::client::{FetchOffset, KafkaClient, TlsConfig};
-
-    use self::openssl::ssl::{SslConnector, SslFiletype, SslMethod, SslVerifyMode};
+    use kafka::{
+        client::{FetchOffset, KafkaClient},
+        security::{SaslConfig, TlsConfig},
+    };
+    use openssl::ssl::{SslConnector, SslFiletype, SslMethod, SslVerifyMode};
+    use sasl::common::Credentials;
+    use std::{env, process};
 
     pub fn main() {
-        env_logger::init();
+        simple_logger::init_with_level(log::Level::Trace).unwrap();
 
         // ~ parse the command line arguments
         let cfg = match Config::from_cmdline() {
             Ok(cfg) => cfg,
             Err(e) => {
-                println!("{}", e);
+                log::error!("{}", e);
                 process::exit(1);
             }
         };
@@ -33,7 +29,7 @@ mod example {
         builder.set_cipher_list("DEFAULT").unwrap();
         builder.set_verify(SslVerifyMode::PEER);
         if let (Some(ccert), Some(ckey)) = (cfg.client_cert, cfg.client_key) {
-            info!("loading cert-file={}, key-file={}", ccert, ckey);
+            log::info!("loading cert-file={ccert}, key-file={ckey}");
 
             builder
                 .set_certificate_file(ccert, SslFiletype::PEM)
@@ -45,7 +41,7 @@ mod example {
         }
 
         if let Some(ca_cert) = cfg.ca_cert {
-            info!("loading ca-file={}", ca_cert);
+            log::info!("loading ca-file={ca_cert}");
 
             builder.set_ca_file(ca_cert).unwrap();
         } else {
@@ -62,13 +58,18 @@ mod example {
         let mut client = KafkaClient::new(
             cfg.brokers,
             cfg.verify_hostname,
+            SaslConfig::Plain(
+                Credentials::default()
+                    .with_username("<username>")
+                    .with_password("<password>"),
+            ),
             TlsConfig::Openssl(connector),
         );
 
         // ~ communicate with the brokers
         match client.load_metadata_all() {
             Err(e) => {
-                println!("{:?}", e);
+                log::error!("{e:?}");
                 drop(client);
                 process::exit(1);
             }
@@ -78,7 +79,7 @@ mod example {
                 // specified brokers
 
                 if client.topics().len() == 0 {
-                    println!("No topics available!");
+                    log::warn!("No topics available!");
                 } else {
                     // ~ now let's communicate with all the brokers in
                     // the cluster our topics are spread over
@@ -86,17 +87,17 @@ mod example {
                     let topics: Vec<String> = client.topics().names().map(Into::into).collect();
                     match client.fetch_offsets(topics.as_slice(), FetchOffset::Latest) {
                         Err(e) => {
-                            println!("{:?}", e);
+                            log::error!("{e:?}");
                             drop(client);
                             process::exit(1);
                         }
                         Ok(toffsets) => {
-                            println!("Topic offsets:");
+                            log::debug!("Topic offets:");
                             for (topic, mut offs) in toffsets {
                                 offs.sort_by_key(|x| x.partition);
-                                println!("{}", topic);
+                                log::debug!("{topic}");
                                 for off in offs {
-                                    println!("\t{}: {:?}", off.partition, off.offset);
+                                    log::debug!("\t{}: {:?}", off.partition, off.offset);
                                 }
                             }
                         }

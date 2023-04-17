@@ -4,10 +4,11 @@
 //! through re-exports of individual items from within
 //! `kafka::client`.
 
-use crate::security::SaslConfig;
 use crate::{
+    codecs::ToByte,
     error::Result,
-    security::{KafkaStream, TlsConfig},
+    protocol::sasl_authenticate::SaslAuthenticateRequest,
+    security::{KafkaStream, SaslConfig, TlsConfig},
 };
 use std::{
     collections::HashMap,
@@ -60,11 +61,22 @@ impl Config {
             host,
             self.rw_timeout,
             self.verify_hostname,
-            self.sasl_config.clone(),
             self.security_config.clone(),
         )
-        .map(|c| {
-            debug!("Established: {:?}", c);
+        .map(|mut c| {
+            log::debug!("Established: {:?}", c);
+
+            let auth_req = SaslAuthenticateRequest::new(0, "test", self.sasl_config.clone());
+
+            let mut buf = Vec::new();
+            if auth_req.encode(&mut buf).is_ok() {
+                println!("{buf:?}");
+                c.send(&buf).ok();
+            }
+
+            let res = c.read_exact_alloc(1024).unwrap_or_default();
+            println!("{res:?}");
+
             c
         })
     }
@@ -126,7 +138,7 @@ impl Connections {
     pub fn get_conn(&mut self, host: &str, now: Instant) -> Result<&mut KafkaConnection> {
         if let Some(conn) = self.conns.get_mut(host) {
             if now.duration_since(conn.last_checkout) >= self.config.idle_timeout {
-                debug!("Idle timeout reached: {:?}", conn.item);
+                log::debug!("Idle timeout reached: {:?}", conn.item);
                 let new_conn = self.config.new_conn(self.state.next_conn_id(), host)?;
                 let _ = conn.item.shutdown();
                 conn.item = new_conn;
@@ -150,7 +162,7 @@ impl Connections {
     pub fn get_conn_any(&mut self, now: Instant) -> Option<&mut KafkaConnection> {
         for (host, conn) in &mut self.conns {
             if now.duration_since(conn.last_checkout) >= self.config.idle_timeout {
-                debug!("Idle timeout reached: {:?}", conn.item);
+                log::debug!("Idle timeout reached: {:?}", conn.item);
                 let new_conn_id = self.state.next_conn_id();
                 let new_conn = match self.config.new_conn(new_conn_id, host.as_str()) {
                     Ok(new_conn) => {
@@ -158,7 +170,7 @@ impl Connections {
                         new_conn
                     }
                     Err(e) => {
-                        warn!("Failed to establish connection to {}: {:?}", host, e);
+                        log::warn!("Failed to establish connection to {}: {:?}", host, e);
                         continue;
                     }
                 };
@@ -200,13 +212,13 @@ impl fmt::Debug for KafkaConnection {
 impl KafkaConnection {
     pub fn send(&mut self, msg: &[u8]) -> Result<usize> {
         let r = self.stream.write(msg).map_err(From::from);
-        trace!("Sent {} bytes to: {:?} => {:?}", msg.len(), self, r);
+        log::trace!("Sent {} bytes to: {:?} => {:?}", msg.len(), self, r);
         r
     }
 
     pub fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
         let r = (self.stream).read_exact(buf).map_err(From::from);
-        trace!("Read {} bytes from: {:?} => {:?}", buf.len(), self, r);
+        log::trace!("Read {} bytes from: {:?} => {:?}", buf.len(), self, r);
         r
     }
 
@@ -218,7 +230,7 @@ impl KafkaConnection {
 
     fn shutdown(&mut self) -> Result<()> {
         let r = self.stream.shutdown(Shutdown::Both);
-        debug!("Shut down: {:?} => {:?}", self, r);
+        log::debug!("Shut down: {:?} => {:?}", self, r);
         r.map_err(From::from)
     }
 
@@ -242,10 +254,9 @@ impl KafkaConnection {
         host: &str,
         rw_timeout: Option<Duration>,
         verify_hostname: bool,
-        sasl_config: SaslConfig,
         security_config: TlsConfig,
     ) -> Result<KafkaConnection> {
-        let stream = KafkaStream::new(host, verify_hostname, sasl_config, security_config)?;
+        let stream = KafkaStream::new(host, verify_hostname, security_config)?;
         KafkaConnection::from_stream(stream, id, host, rw_timeout)
     }
 }

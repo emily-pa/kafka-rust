@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate log;
-
 fn main() {
     example::main();
 }
@@ -11,7 +8,10 @@ mod example {
         client::{FetchOffset, KafkaClient},
         security::{SaslConfig, TlsConfig},
     };
+    use log;
+    use log::Level;
     use rustls::{client::WebPkiVerifier, RootCertStore};
+    use sasl::common::Credentials;
     use std::{env, fs, io::BufReader, process, sync::Arc};
 
     fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
@@ -46,13 +46,13 @@ mod example {
     }
 
     pub fn main() {
-        env_logger::init();
+        simple_logger::init_with_level(Level::Debug).unwrap();
 
         // ~ parse the command line arguments
         let cfg = match Config::from_cmdline() {
             Ok(cfg) => cfg,
             Err(e) => {
-                println!("{}", e);
+                log::error!("{e}");
                 process::exit(1);
             }
         };
@@ -69,13 +69,13 @@ mod example {
         let config_builder = rustls::ClientConfig::builder().with_safe_defaults();
         let rustls_config = {
             if let Some(ca_cert) = cfg.ca_cert {
-                info!("loading ca-file={}", ca_cert);
+                log::info!("loading ca-file={}", ca_cert);
                 let with_cert = config_builder.with_custom_certificate_verifier(Arc::new(
                     WebPkiVerifier::new(root_store, None),
                 ));
 
                 if let (Some(ccert), Some(ckey)) = (cfg.client_cert, cfg.client_key) {
-                    info!("loading cert-file={}, key-file={}", ccert, ckey);
+                    log::info!("loading cert-file={}, key-file={}", ccert, ckey);
                     with_cert
                         .with_single_cert(load_certs(&ccert), load_private_key(&ckey))
                         .expect("Could not add cert")
@@ -86,7 +86,7 @@ mod example {
                 let without_cert = config_builder.with_root_certificates(root_store);
 
                 if let (Some(ccert), Some(ckey)) = (cfg.client_cert, cfg.client_key) {
-                    info!("loading cert-file={}, key-file={}", ccert, ckey);
+                    log::info!("loading cert-file={}, key-file={}", ccert, ckey);
                     without_cert
                         .with_single_cert(load_certs(&ccert), load_private_key(&ckey))
                         .expect("Could not add cert")
@@ -100,14 +100,18 @@ mod example {
         let mut client = KafkaClient::new(
             cfg.brokers,
             cfg.verify_hostname,
-            SaslConfig::None,
+            SaslConfig::Plain(
+                Credentials::default()
+                    .with_username("<username>".to_string())
+                    .with_password("<assword>".to_string()),
+            ),
             TlsConfig::Rustls(rustls_config),
         );
 
         // ~ communicate with the brokers
         match client.load_metadata_all() {
             Err(e) => {
-                println!("{:?}", e);
+                log::error!("{e:?}");
                 drop(client);
                 process::exit(1);
             }
@@ -117,7 +121,7 @@ mod example {
                 // specified brokers
 
                 if client.topics().len() == 0 {
-                    println!("No topics available!");
+                    log::warn!("No topics available");
                 } else {
                     // ~ now let's communicate with all the brokers in
                     // the cluster our topics are spread over
@@ -125,17 +129,17 @@ mod example {
                     let topics: Vec<String> = client.topics().names().map(Into::into).collect();
                     match client.fetch_offsets(topics.as_slice(), FetchOffset::Latest) {
                         Err(e) => {
-                            println!("{:?}", e);
+                            log::error!("{e:?}");
                             drop(client);
                             process::exit(1);
                         }
                         Ok(toffsets) => {
-                            println!("Topic offsets:");
+                            log::debug!("Topic offsets:");
                             for (topic, mut offs) in toffsets {
                                 offs.sort_by_key(|x| x.partition);
-                                println!("{}", topic);
+                                log::debug!("{topic}");
                                 for off in offs {
-                                    println!("\t{}: {:?}", off.partition, off.offset);
+                                    log::debug!("\t{}: {:?}", off.partition, off.offset);
                                 }
                             }
                         }

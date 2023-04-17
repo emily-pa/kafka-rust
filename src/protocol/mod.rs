@@ -23,6 +23,7 @@ pub mod offset;
 pub mod produce;
 
 pub mod fetch;
+pub mod sasl_authenticate;
 mod zreader;
 
 // ~ convenient re-exports for request/response types defined in the
@@ -46,9 +47,11 @@ const API_KEY_METADATA: i16 = 3;
 const API_KEY_OFFSET_COMMIT: i16 = 8;
 const API_KEY_OFFSET_FETCH: i16 = 9;
 const API_KEY_GROUP_COORDINATOR: i16 = 10;
+const API_KEY_SASL_HANDSHAKE: i16 = 17;
+const API_KEY_SASL_AUTHENTICATE: i16 = 36;
 
 // the default version of Kafka API we are requesting
-const API_VERSION: i16 = 0;
+const API_VERSION: i16 = 1;
 
 // --------------------------------------------------------------------
 
@@ -179,7 +182,6 @@ pub fn to_crc(data: &[u8]) -> u32 {
 /// Safely converts a Duration into the number of milliseconds as a
 /// i32 as often required in the kafka protocol.
 pub fn to_millis_i32(d: Duration) -> Result<i32> {
-    use std::i32;
     let m = d
         .as_secs()
         .saturating_mul(1_000)
@@ -193,8 +195,6 @@ pub fn to_millis_i32(d: Duration) -> Result<i32> {
 
 #[test]
 fn test_to_millis_i32() {
-    use std::{i32, u32, u64};
-
     fn assert_invalid(d: Duration) {
         match to_millis_i32(d) {
             Err(Error::InvalidDuration) => {}

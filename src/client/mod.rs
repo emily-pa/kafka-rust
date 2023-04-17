@@ -4,25 +4,25 @@
 //! The entry point into this module is `KafkaClient` obtained by a
 //! call to `KafkaClient::new()`.
 
-use std;
+use crate::{
+    client_internals::KafkaClientInternals,
+    codecs::{FromByte, ToByte},
+    error::{Error, KafkaCode, Result},
+    protocol::{self, ResponseParser},
+    security::{SaslConfig, TlsConfig},
+};
 use std::collections::hash_map;
-use std::collections::hash_map::HashMap;
-use std::io::Cursor;
-use std::iter::Iterator;
-use std::mem;
-use std::thread;
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    io::Cursor,
+    iter::Iterator,
+    mem, thread,
+    time::{Duration, Instant},
+};
 
 // pub re-export
 pub use crate::compression::Compression;
 pub use crate::utils::PartitionOffset;
-
-use crate::codecs::{FromByte, ToByte};
-use crate::error::{Error, KafkaCode, Result};
-use crate::protocol::{self, ResponseParser};
-
-use crate::client_internals::KafkaClientInternals;
-use crate::security::{SaslConfig, TlsConfig};
 
 pub mod metadata;
 mod network;
@@ -390,7 +390,8 @@ impl KafkaClient {
     /// use kafka::client::{KafkaClient, TlsConfig};
     ///
     /// fn main() {
-    ///     let (key, cert) = ("client.key".to_string(), "client.crt".to_string());
+    ///     use kafka::security::SaslConfig;
+    /// let (key, cert) = ("client.key".to_string(), "client.crt".to_string());
     ///
     ///     // OpenSSL offers a variety of complex configurations. Here is an example:
     ///     let mut builder = SslConnector::builder(SslMethod::tls()).unwrap();
@@ -406,14 +407,14 @@ impl KafkaClient {
     ///     builder.set_verify(SslVerifyMode::PEER);
     ///     let connector = builder.build();
     ///
-    ///     let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()), true,
+    ///     let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()), true, SaslConfig::None,
     ///                                              TlsConfig::new(connector));
     ///     client.load_metadata_all().unwrap();
     /// }
     /// ```
     /// See also `TlsConfig#with_hostname_verification` to disable hostname verification.
     ///
-    /// See also `KafkaClient::load_metadatata_all` and
+    /// See also `KafkaClient::load_metadata_all` and
     /// `KafkaClient::load_metadata` methods, the creates
     /// [openssl](https://crates.io/crates/openssl)
     /// and [`openssl_verify`](https://crates.io/crates/openssl-verify),
@@ -485,8 +486,9 @@ impl KafkaClient {
     ///
     /// ```no_run
     /// use kafka::client::{Compression, KafkaClient};
+    /// use kafka::security::{SaslConfig, TlsConfig};
     ///
-    /// let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()), false, TlsConfig::None);
+    /// let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()), false, SaslConfig::None, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
     /// client.set_compression(Compression::NONE);
     /// ```
@@ -539,8 +541,9 @@ impl KafkaClient {
     /// ```no_run
     /// use std::time::Duration;
     /// use kafka::client::{KafkaClient, FetchPartition};
+    /// use kafka::security::{SaslConfig, TlsConfig};
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, TlsConfig::None);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SaslConfig::None, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
     /// client.set_fetch_max_wait_time(Duration::from_millis(100)).ok();
     /// client.set_fetch_min_bytes(64 * 1024);
@@ -704,8 +707,9 @@ impl KafkaClient {
     /// ```no_run
     /// use kafka::client::KafkaClient;
     /// use kafka::client::metadata::Broker;
+    /// use kafka::security::{SaslConfig, TlsConfig};
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, TlsConfig::None);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SaslConfig::None, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
     /// for topic in client.topics() {
     ///   for partition in topic.partitions() {
@@ -728,7 +732,8 @@ impl KafkaClient {
     /// # Examples
     ///
     /// ```no_run
-    /// let mut client = kafka::client::KafkaClient::new(vec!("localhost:9092".to_owned()), false, TlsConfig::None);
+    /// use kafka::security::{SaslConfig, TlsConfig};
+    /// let mut client = kafka::client::KafkaClient::new(vec!("localhost:9092".to_owned()), false, SaslConfig::None, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
     /// for topic in client.topics().names() {
     ///   println!("topic: {}", topic);
@@ -763,7 +768,8 @@ impl KafkaClient {
     /// # Examples
     ///
     /// ```no_run
-    /// let mut client = kafka::client::KafkaClient::new(vec!("localhost:9092".to_owned()), false, TlsConfig::None);
+    /// use kafka::security::{SaslConfig, TlsConfig};
+    /// let mut client = kafka::client::KafkaClient::new(vec!("localhost:9092".to_owned()), false, SaslConfig::None, TlsConfig::None);
     /// let _ = client.load_metadata(&["my-topic"]).unwrap();
     /// ```
     ///
@@ -798,21 +804,22 @@ impl KafkaClient {
         let now = Instant::now();
 
         for host in &self.config.hosts {
-            debug!("fetch_metadata: requesting metadata from {}", host);
+            log::debug!("fetch_metadata: requesting metadata from {host}");
             match self.conn_pool.get_conn(host, now) {
                 Ok(conn) => {
                     let req =
                         protocol::MetadataRequest::new(correlation, &self.config.client_id, topics);
                     match __send_request(conn, req) {
                         Ok(_) => return __get_response::<protocol::MetadataResponse>(conn),
-                        Err(e) => debug!(
+                        Err(e) => log::debug!(
                             "fetch_metadata: failed to request metadata from {}: {}",
-                            host, e
+                            host,
+                            e
                         ),
                     }
                 }
                 Err(e) => {
-                    debug!("fetch_metadata: failed to connect to {}: {}", host, e);
+                    log::debug!("fetch_metadata: failed to connect to {}: {}", host, e);
                 }
             }
         }
@@ -825,6 +832,7 @@ impl KafkaClient {
     ///
     /// ```no_run
     /// use kafka::client::KafkaClient;
+    /// use kafka::security::{SaslConfig, TlsConfig};
     ///
     /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SaslConfig::None, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
@@ -937,8 +945,9 @@ impl KafkaClient {
     ///
     /// ```no_run
     /// use kafka::client::{KafkaClient, FetchOffset};
+    /// use kafka::security::{SaslConfig, TlsConfig};
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, TlsConfig::None);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SaslConfig::None, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
     /// let offsets = client.fetch_topic_offsets("my-topic", FetchOffset::Latest).unwrap();
     /// ```
@@ -986,7 +995,7 @@ impl KafkaClient {
     ///
     /// Note: before using this method consider using
     /// `kafka::consumer::Consumer` instead which provides an easier
-    /// to use API for the regular use-case of fetching messesage from
+    /// to use API for the regular use-case of fetching message from
     /// Kafka.
     ///
     /// # Example
@@ -1000,8 +1009,9 @@ impl KafkaClient {
     ///
     /// ```no_run
     /// use kafka::client::{KafkaClient, FetchPartition};
+    /// use kafka::security::{SaslConfig, TlsConfig};
     ///
-    /// let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()));
+    /// let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()), false, SaslConfig::None, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
     /// let reqs = &[FetchPartition::new("my-topic", 0, 0),
     ///              FetchPartition::new("my-topic-2", 0, 0).with_max_bytes(1024*1024)];
@@ -1102,8 +1112,9 @@ impl KafkaClient {
     /// ```no_run
     /// use std::time::Duration;
     /// use kafka::client::{KafkaClient, ProduceMessage, RequiredAcks};
+    /// use kafka::security::{SaslConfig, TlsConfig};
     ///
-    /// let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()));
+    /// let mut client = KafkaClient::new(vec!("localhost:9092".to_owned()), false, SaslConfig::None, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
     /// let req = vec![ProduceMessage::new("my-topic", 0, None, Some("a".as_bytes())),
     ///                ProduceMessage::new("my-topic-2", 0, None, Some("b".as_bytes()))];
@@ -1137,7 +1148,8 @@ impl KafkaClient {
     /// ```no_run
     /// use kafka::client::{KafkaClient, CommitOffset};
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, TlsConfig::None);
+    /// use kafka::security::{SaslConfig, TlsConfig};
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SaslConfig, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
     /// client.commit_offsets("my-group",
     ///     &[CommitOffset::new("my-topic", 0, 100),
@@ -1149,7 +1161,7 @@ impl KafkaClient {
     /// partition "my-topic:0" and 99 for the topic partition
     /// "my-topic:1".  Once successfully committed, these can then be
     /// retrieved using `fetch_group_offsets` even from another
-    /// process or at much later point in time to resume comusing the
+    /// process or at much later point in time to resume consuming the
     /// topic partitions as of these offsets.
     pub fn commit_offsets<'a, J, I>(&mut self, group: &str, offsets: I) -> Result<()>
     where
@@ -1171,10 +1183,10 @@ impl KafkaClient {
             }
         }
         if req.topic_partitions.is_empty() {
-            debug!("commit_offsets: no offsets provided");
+            log::debug!("commit_offsets: no offsets provided");
             Ok(())
         } else {
-            __commit_offsets(req, &mut self.state, &mut self.conn_pool, &self.config)
+            __commit_offsets(&req, &mut self.state, &mut self.conn_pool, &self.config)
         }
     }
 
@@ -1186,7 +1198,8 @@ impl KafkaClient {
     /// ```no_run
     /// use kafka::client::KafkaClient;
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, TlsConfig::None);
+    /// use kafka::security::{SaslConfig, TlsConfig};
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SaslConfig::None, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
     /// client.commit_offset("my-group", "my-topic", 0, 100).unwrap();
     /// ```
@@ -1209,7 +1222,8 @@ impl KafkaClient {
     /// ```no_run
     /// use kafka::client::{KafkaClient, FetchGroupOffset};
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, TlsConfig::None);
+    /// use kafka::security::{SaslConfig, TlsConfig};
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SaslConfig, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
     ///
     /// let offsets =
@@ -1243,7 +1257,7 @@ impl KafkaClient {
                 return Err(Error::Kafka(KafkaCode::UnknownTopicOrPartition));
             }
         }
-        __fetch_group_offsets(req, &mut self.state, &mut self.conn_pool, &self.config)
+        __fetch_group_offsets(&req, &mut self.state, &mut self.conn_pool, &self.config)
     }
 
     /// Fetch offset for all partitions of a particular topic of a consumer group
@@ -1252,8 +1266,9 @@ impl KafkaClient {
     ///
     /// ```no_run
     /// use kafka::client::KafkaClient;
+    /// use kafka::security::{SaslConfig, TlsConfig};
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, TlsConfig::None);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SaslConfig::None, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
     /// let offsets = client.fetch_group_topic_offsets("my-group", "my-topic").unwrap();
     /// ```
@@ -1279,7 +1294,7 @@ impl KafkaClient {
         }
 
         Ok(
-            __fetch_group_offsets(req, &mut self.state, &mut self.conn_pool, &self.config)?
+            __fetch_group_offsets(&req, &mut self.state, &mut self.conn_pool, &self.config)?
                 .remove(topic)
                 .unwrap_or_default(),
         )
@@ -1348,9 +1363,10 @@ fn __get_group_coordinator<'a>(
         // try connecting to the user specified bootstrap server similar
         // to the way `load_metadata` works.
         let conn = conn_pool.get_conn_any(now).expect("available connection");
-        debug!(
+        log::debug!(
             "get_group_coordinator: asking for coordinator of '{}' on: {:?}",
-            group, conn
+            group,
+            conn
         );
         let r = __send_receive_conn::<_, protocol::GroupCoordinatorResponse>(conn, &req)?;
         let retry_code = match r.into_result() {
@@ -1363,9 +1379,10 @@ fn __get_group_coordinator<'a>(
             }
         };
         if attempt < config.retry_max_attempts {
-            debug!(
+            log::debug!(
                 "get_group_coordinator: will retry request (c: {}) due to: {:?}",
-                req.header.correlation_id, retry_code
+                req.header.correlation_id,
+                retry_code
             );
             attempt += 1;
             __retry_sleep(config);
@@ -1376,7 +1393,7 @@ fn __get_group_coordinator<'a>(
 }
 
 fn __commit_offsets(
-    req: protocol::OffsetCommitRequest<'_, '_>,
+    req: &protocol::OffsetCommitRequest<'_, '_>,
     state: &mut state::ClientState,
     conn_pool: &mut network::Connections,
     config: &ClientConfig,
@@ -1387,9 +1404,10 @@ fn __commit_offsets(
 
         let tps = {
             let host = __get_group_coordinator(req.group, state, conn_pool, config, now)?;
-            debug!(
+            log::debug!(
                 "__commit_offsets: sending offset commit request '{:?}' to: {}",
-                req, host
+                req,
+                host
             );
             __send_receive::<_, protocol::OffsetCommitResponse>(conn_pool, host, now, &req)?
                 .topic_partitions
@@ -1406,7 +1424,7 @@ fn __commit_offsets(
                         break 'rproc;
                     }
                     Some(e @ KafkaCode::NotCoordinatorForGroup) => {
-                        debug!(
+                        log::debug!(
                             "commit_offsets: resetting group coordinator for '{}'",
                             req.group
                         );
@@ -1424,9 +1442,10 @@ fn __commit_offsets(
         match retry_code {
             Some(e) => {
                 if attempt < config.retry_max_attempts {
-                    debug!(
+                    log::debug!(
                         "commit_offsets: will retry request (c: {}) due to: {:?}",
-                        req.header.correlation_id, e
+                        req.header.correlation_id,
+                        e
                     );
                     attempt += 1;
                     __retry_sleep(config);
@@ -1440,7 +1459,7 @@ fn __commit_offsets(
 }
 
 fn __fetch_group_offsets(
-    req: protocol::OffsetFetchRequest<'_, '_, '_>,
+    req: &protocol::OffsetFetchRequest<'_, '_, '_>,
     state: &mut state::ClientState,
     conn_pool: &mut network::Connections,
     config: &ClientConfig,
@@ -1451,14 +1470,15 @@ fn __fetch_group_offsets(
 
         let r = {
             let host = __get_group_coordinator(req.group, state, conn_pool, config, now)?;
-            debug!(
+            log::debug!(
                 "fetch_group_offsets: sending request {:?} to: {}",
-                req, host
+                req,
+                host
             );
             __send_receive::<_, protocol::OffsetFetchResponse>(conn_pool, host, now, &req)?
         };
 
-        debug!("fetch_group_offsets: received response: {:#?}", r);
+        log::debug!("fetch_group_offsets: received response: {:#?}", r);
 
         let mut retry_code = None;
         let mut topic_map = HashMap::with_capacity(r.topic_partitions.len());
@@ -1476,7 +1496,7 @@ fn __fetch_group_offsets(
                         break 'rproc;
                     }
                     Err(Error::Kafka(e @ KafkaCode::NotCoordinatorForGroup)) => {
-                        debug!(
+                        log::debug!(
                             "fetch_group_offsets: resetting group coordinator for '{}'",
                             req.group
                         );
@@ -1499,12 +1519,13 @@ fn __fetch_group_offsets(
         match retry_code {
             Some(e) => {
                 if attempt < config.retry_max_attempts {
-                    debug!(
+                    log::debug!(
                         "fetch_group_offsets: will retry request (c: {}) due to: {:?}",
-                        req.header.correlation_id, e
+                        req.header.correlation_id,
+                        e
                     );
                     attempt += 1;
-                    __retry_sleep(config)
+                    __retry_sleep(config);
                 } else {
                     return Err(Error::Kafka(e));
                 }
@@ -1605,7 +1626,7 @@ fn __send_request<T: ToByte>(conn: &mut network::KafkaConnection, request: T) ->
     let size = buffer.len() as i32 - 4;
     size.encode(&mut &mut buffer[..])?;
 
-    trace!("__send_request: Sending bytes: {:?}", &buffer);
+    log::trace!("__send_request: Sending bytes: {:?}", &buffer);
 
     // ~ send the prepared buffer
     conn.send(&buffer)
@@ -1615,7 +1636,7 @@ fn __get_response<T: FromByte>(conn: &mut network::KafkaConnection) -> Result<T:
     let size = __get_response_size(conn)?;
     let resp = conn.read_exact_alloc(size as usize)?;
 
-    trace!("__get_response: received bytes: {:?}", &resp);
+    log::trace!("__get_response: received bytes: {:?}", &resp);
 
     // {
     //     use std::fs::OpenOptions;
@@ -1679,5 +1700,5 @@ fn __get_response_size(conn: &mut network::KafkaConnection) -> Result<i32> {
 /// Suspends the calling thread for the configured "retry" time. This
 /// method should be called _only_ as part of a retry attempt.
 fn __retry_sleep(cfg: &ClientConfig) {
-    thread::sleep(cfg.retry_backoff_time)
+    thread::sleep(cfg.retry_backoff_time);
 }

@@ -1,3 +1,4 @@
+use log::Level;
 use std::io::{self, Write};
 use std::time::Duration;
 use std::{env, process};
@@ -8,7 +9,7 @@ use kafka::consumer::{Consumer, FetchOffset, GroupOffsetStorage};
 /// This is a very simple command line application reading from a
 /// specific kafka topic and dumping the messages to standard output.
 fn main() {
-    env_logger::init();
+    simple_logger::init_with_level(Level::Debug).unwrap();
 
     let cfg = match Config::from_cmdline() {
         Ok(cfg) => cfg,

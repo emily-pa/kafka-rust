@@ -61,7 +61,7 @@ fn test_consumer_commit_messageset() {
         Some(0),
     );
 
-    debug!("start offsets: {:?}", start_offsets);
+    log::debug!("start offsets: {:?}", start_offsets);
 
     // poll once to set a position in the topic
     let messages = consumer.poll().unwrap();
@@ -104,7 +104,7 @@ fn test_consumer_commit_messageset() {
         Some(0),
     );
 
-    debug!("end offsets: {:?}", latest_offsets);
+    log::debug!("end offsets: {:?}", latest_offsets);
 
     // add up the differences
     let num_new_messages_committed = diff_group_offsets(&start_offsets, &latest_offsets);
@@ -143,7 +143,7 @@ fn test_consumer_commit_messageset_no_consumes() {
         Some(0),
     );
 
-    debug!("start offsets: {:?}", start_offsets);
+    log::debug!("start offsets: {:?}", start_offsets);
 
     // poll once to set a position in the topic
     let messages = consumer.poll().unwrap();
@@ -188,7 +188,7 @@ fn test_consumer_commit_messageset_no_consumes() {
         Some(0),
     );
 
-    debug!("end offsets: {:?}", latest_offsets);
+    log::debug!("end offsets: {:?}", latest_offsets);
 
     // add up the differences
     let num_new_messages_committed = diff_group_offsets(&start_offsets, &latest_offsets);

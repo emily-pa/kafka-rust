@@ -22,6 +22,10 @@ pub enum Error {
     #[error(transparent)]
     RustlDns(#[from] rustls::client::InvalidDnsNameError),
 
+    #[cfg(feature = "security-sasl")]
+    #[error(transparent)]
+    Sasl(#[from] sasl::client::MechanismError),
+
     #[cfg(feature = "snappy")]
     #[error(transparent)]
     InvalidSnappy(#[from] ::snap::Error),

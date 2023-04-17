@@ -2,11 +2,12 @@ use kafka::{
     client::{FetchPartition, KafkaClient},
     security::{SaslConfig, TlsConfig},
 };
+use log::Level;
 
 /// This program demonstrates the low level api for fetching messages.
 /// Please look at examles/consume.rs for an easier to use API.
 fn main() {
-    env_logger::init();
+    simple_logger::init_with_level(Level::Debug).unwrap();
 
     let broker = "localhost:9092";
     let topic = "my-topic";

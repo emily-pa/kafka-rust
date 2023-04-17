@@ -12,9 +12,6 @@
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
 
-#[macro_use]
-extern crate tracing;
-
 #[cfg(feature = "snappy")]
 extern crate snap;
 

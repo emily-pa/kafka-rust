@@ -138,7 +138,7 @@ impl<'a> ToByte for TopicPartitionProduceRequest<'a> {
         self.topic.encode(buffer)?;
         (self.partitions.len() as i32).encode(buffer)?;
         for e in &self.partitions {
-            e._encode(buffer, self.compression)?
+            e._encode(buffer, self.compression)?;
         }
         Ok(())
     }
@@ -263,14 +263,18 @@ impl ProduceResponse {
     pub fn get_response(self) -> Vec<ProduceConfirm> {
         self.topic_partitions
             .into_iter()
-            .map(|tp| tp.get_response())
+            .map(TopicPartitionProduceResponse::get_response)
             .collect()
     }
 }
 
 impl TopicPartitionProduceResponse {
     pub fn get_response(self) -> ProduceConfirm {
-        let confirms = self.partitions.iter().map(|p| p.get_response()).collect();
+        let confirms = self
+            .partitions
+            .iter()
+            .map(PartitionProduceResponse::get_response)
+            .collect();
 
         ProduceConfirm {
             topic: self.topic,

@@ -4,6 +4,7 @@ use kafka::{
     client::{Compression, KafkaClient, RequiredAcks, DEFAULT_CONNECTION_IDLE_TIMEOUT_MILLIS},
     producer::{AsBytes, Producer, Record, DEFAULT_ACK_TIMEOUT_MILLIS},
 };
+use log::Level;
 use std::{
     env,
     fs::File,
@@ -21,7 +22,7 @@ use std::{
 /// Alternatively, messages can be read from an input file and sent do
 /// kafka in batches (the typical use-case).
 fn main() {
-    env_logger::init();
+    simple_logger::init_with_level(Level::Debug).unwrap();
 
     let cfg = match Config::from_cmdline() {
         Ok(cfg) => cfg,

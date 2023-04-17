@@ -53,7 +53,7 @@ pub fn test_consumer_with_client(mut client: KafkaClient) -> Consumer {
     // is always at the latest offset before being used.
     let latest_offsets = client.fetch_offsets(&topics, FetchOffset::Latest).unwrap();
 
-    debug!("latest_offsets: {:?}", latest_offsets);
+    log::debug!("latest_offsets: {:?}", latest_offsets);
 
     for (topic, partition_offsets) in latest_offsets {
         for po in partition_offsets {
@@ -74,7 +74,7 @@ pub fn test_consumer_with_client(mut client: KafkaClient) -> Consumer {
         .into_iter()
         .collect();
 
-    debug!("partition_offsets: {:?}", partition_offsets);
+    log::debug!("partition_offsets: {:?}", partition_offsets);
 
     test_consumer_config!(Consumer::from_client(client))
         .create()

@@ -1,9 +1,7 @@
 //! Encapsulates topic partition assignments to a consumer. Once
 //! constructed these assignments are not modified.
 
-use std::collections::HashMap;
-use std::ops::Index;
-use std::u32;
+use std::{collections::HashMap, ops::Index};
 
 /// A read-only configuration for `Consumer`.
 #[derive(Debug)]

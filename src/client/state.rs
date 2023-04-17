@@ -270,7 +270,7 @@ impl ClientState {
     /// Loads new and updates existing metadata from the given
     /// metadata response.
     pub fn update_metadata(&mut self, md: protocol::MetadataResponse) {
-        debug!("updating metadata from: {:?}", md);
+        log::debug!("updating metadata from: {:?}", md);
 
         // ~ register new brokers with self.brokers and obtain an
         // index over them by broker-node-id
@@ -376,9 +376,10 @@ impl ClientState {
         group: &str,
         gc: &protocol::GroupCoordinatorResponse,
     ) -> &'a str {
-        debug!(
+        log::debug!(
             "set_group_coordinator: registering coordinator for '{}': {:?}",
-            group, gc
+            group,
+            gc
         );
 
         let group_host = format!("{}:{}", gc.host, gc.port);
@@ -387,10 +388,12 @@ impl ClientState {
         for (i, broker) in (0u32..).zip(self.brokers.iter()) {
             if gc.broker_id == broker.node_id {
                 if group_host != broker.host {
-                    warn!(
+                    log::warn!(
                         "set_group_coordinator: coord_host({}) != broker_host({}) for \
                            broker_id({})!",
-                        group_host, broker.host, broker.node_id
+                        group_host,
+                        broker.host,
+                        broker.node_id
                     );
                 }
                 broker_ref.index = i;

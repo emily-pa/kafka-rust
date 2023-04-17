@@ -58,7 +58,7 @@ pub struct State {
     pub consumed_offsets: HashMap<TopicPartition, ConsumedOffset, PartitionHasher>,
 }
 
-impl<'a> fmt::Debug for State {
+impl fmt::Debug for State {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -86,7 +86,7 @@ impl State {
                 let xs = assignments.as_slice();
                 let mut subs = Vec::with_capacity(xs.len());
                 for x in xs {
-                    subs.push(determine_partitions(x, client.topics())?);
+                    subs.push(determine_partitions(x, &client.topics())?);
                 }
                 subs
             };
@@ -142,21 +142,19 @@ struct Subscription<'a> {
 /// ordered list of the partition ids to consume.
 fn determine_partitions<'a>(
     assignment: &'a Assignment,
-    metadata: Topics<'_>,
+    metadata: &Topics<'_>,
 ) -> Result<Subscription<'a>> {
     let topic = assignment.topic();
     let req_partitions = assignment.partitions();
-    let avail_partitions = match metadata.partitions(topic) {
-        // ~ fail if the underlying topic is unknown to the given client
-        None => {
-            debug!(
+    let Some(avail_partitions) = metadata.partitions(topic) else {
+        log::debug!(
                 "determine_partitions: no such topic: {} (all metadata: {:?})",
-                topic, metadata
+                topic,
+                metadata
             );
-            return Err(Error::Kafka(KafkaCode::UnknownTopicOrPartition));
-        }
-        Some(tp) => tp,
+        return Err(Error::Kafka(KafkaCode::UnknownTopicOrPartition));
     };
+
     let ps = if req_partitions.is_empty() {
         // ~ no partitions configured ... use all available
         let mut ps: Vec<i32> = Vec::with_capacity(avail_partitions.len());
@@ -171,10 +169,12 @@ fn determine_partitions<'a>(
         for &p in req_partitions {
             match avail_partitions.partition(p) {
                 None => {
-                    debug!(
+                    log::debug!(
                         "determine_partitions: no such partition: \"{}:{}\" \
                             (all metadata: {:?})",
-                        topic, p, metadata
+                        topic,
+                        p,
+                        metadata
                     );
                     return Err(Error::Kafka(KafkaCode::UnknownTopicOrPartition));
                 }
@@ -234,7 +234,7 @@ fn load_consumed_offsets(
         }
     }
 
-    debug!("load_consumed_offsets: constructed consumed: {:#?}", offs);
+    log::debug!("load_consumed_offsets: constructed consumed: {:#?}", offs);
 
     Ok(offs)
 }
@@ -283,7 +283,7 @@ fn load_fetch_states(
                 .expect("unassigned subscription");
             match offsets.get(s.assignment.topic()) {
                 None => {
-                    debug!(
+                    log::debug!(
                         "load_fetch_states: failed to load fallback offsets for: {}",
                         s.assignment.topic()
                     );
@@ -338,7 +338,7 @@ fn load_fetch_states(
                         FetchOffset::Latest => l_off,
                         FetchOffset::Earliest => e_off,
                         _ => {
-                            debug!(
+                            log::debug!(
                                 "cannot determine fetch offset \
                                         (group: {} / topic: {} / partition: {})",
                                 &config.group,

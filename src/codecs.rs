@@ -181,8 +181,10 @@ impl FromByte for i64 {
     }
 }
 
+#[allow(clippy::question_mark)]
 impl FromByte for String {
     type R = String;
+
     fn decode<T: Read>(&mut self, buffer: &mut T) -> Result<()> {
         let mut length: i16 = 0;
         if let Err(e) = decode!(buffer, read_i16, &mut length) {
@@ -200,6 +202,7 @@ impl FromByte for String {
     }
 }
 
+#[allow(clippy::question_mark)]
 impl<V: FromByte + Default> FromByte for Vec<V> {
     type R = Vec<V>;
 

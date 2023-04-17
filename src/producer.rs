@@ -162,6 +162,7 @@ impl<'a, K, V> Record<'a, K, V> {
 
     /// Convenience method to set the partition.
     #[inline]
+    #[must_use]
     pub fn with_partition(mut self, partition: i32) -> Self {
         self.partition = partition;
         self
@@ -222,17 +223,20 @@ struct Config {
 
 impl Producer {
     /// Starts building a new producer using the given Kafka client.
+    #[must_use]
     pub fn from_client(client: KafkaClient) -> Builder<DefaultPartitioner> {
         Builder::new(Some(client), Vec::new())
     }
 
-    /// Starts building a producer bootstraping internally a new kafka
+    /// Starts building a producer bootstrapping internally a new kafka
     /// client from the given kafka hosts.
+    #[must_use]
     pub fn from_hosts(hosts: Vec<String>) -> Builder<DefaultPartitioner> {
         Builder::new(None, hosts)
     }
 
     /// Borrows the underlying kafka client.
+    #[must_use]
     pub fn client(&self) -> &KafkaClient {
         &self.client
     }
@@ -243,6 +247,7 @@ impl Producer {
     }
 
     /// Destroys this producer returning the underlying kafka client.
+    #[must_use]
     pub fn into_client(self) -> KafkaClient {
         self.client
     }
@@ -250,7 +255,7 @@ impl Producer {
 
 impl<P: Partitioner> Producer<P> {
     /// Synchronously send the specified message to Kafka.
-    pub fn send<'a, K, V>(&mut self, rec: &Record<'a, K, V>) -> Result<()>
+    pub fn send<K, V>(&mut self, rec: &Record<K, V>) -> Result<()>
     where
         K: AsBytes,
         V: AsBytes,
@@ -279,7 +284,7 @@ impl<P: Partitioner> Producer<P> {
     /// Synchronously send all of the specified messages to Kafka. To validate
     /// that all of the specified records have been successfully delivered,
     /// inspection of the offsets on the returned confirms is necessary.
-    pub fn send_all<'a, K, V>(&mut self, recs: &[Record<'a, K, V>]) -> Result<Vec<ProduceConfirm>>
+    pub fn send_all<K, V>(&mut self, recs: &[Record<K, V>]) -> Result<Vec<ProduceConfirm>>
     where
         K: AsBytes,
         V: AsBytes,
@@ -317,7 +322,7 @@ fn to_option(data: &[u8]) -> Option<&[u8]> {
 // --------------------------------------------------------------------
 
 impl<P> State<P> {
-    fn new(client: &mut KafkaClient, partitioner: P) -> Result<State<P>> {
+    fn new(client: &mut KafkaClient, partitioner: P) -> State<P> {
         let ts = client.topics();
         let mut ids = HashMap::with_capacity(ts.len());
         for t in ts {
@@ -330,10 +335,10 @@ impl<P> State<P> {
                 },
             );
         }
-        Ok(State {
+        State {
             partitions: ids,
             partitioner,
-        })
+        }
     }
 }
 
@@ -493,7 +498,7 @@ impl<P> Builder<P> {
             client.load_metadata_all()?;
         }
         // ~ create producer state
-        let state = State::new(&mut client, self.partitioner)?;
+        let state = State::new(&mut client, self.partitioner);
         Ok(Producer {
             client,
             state,

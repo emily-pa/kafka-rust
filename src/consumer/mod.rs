@@ -24,7 +24,7 @@
 //!     for m in ms.messages() {
 //!       println!("{:?}", m);
 //!     }
-//!     consumer.consume_messageset(ms);
+//!     consumer.consume_messageset(ms).ok();
 //!   }
 //!   consumer.commit_consumed().unwrap();
 //! }
@@ -100,17 +100,20 @@ pub struct Consumer {
 
 impl Consumer {
     /// Starts building a consumer using the given kafka client.
+    #[must_use]
     pub fn from_client(client: KafkaClient) -> Builder {
         builder::new(Some(client), Vec::new())
     }
 
     /// Starts building a consumer bootstraping internally a new kafka
     /// client from the given kafka hosts.
+    #[must_use]
     pub fn from_hosts(hosts: Vec<String>) -> Builder {
         builder::new(None, hosts)
     }
 
     /// Borrows the underlying kafka client.
+    #[must_use]
     pub fn client(&self) -> &KafkaClient {
         &self.client
     }
@@ -121,12 +124,14 @@ impl Consumer {
     }
 
     /// Destroys this consumer returning back the underlying kafka client.
+    #[must_use]
     pub fn into_client(self) -> KafkaClient {
         self.client
     }
 
     /// Retrieves the topic partitions being currently consumed by
     /// this consumer.
+    #[must_use]
     pub fn subscriptions(&self) -> HashMap<String, Vec<i32>> {
         // ~ current subscriptions are reflected by
         // `self.state.fetch_offsets` see `self.fetch_messages()`.
@@ -166,6 +171,7 @@ impl Consumer {
 
     /// Retrieves the group on which behalf this consumer is acting.
     /// The empty group name specifies a group-less consumer.
+    #[must_use]
     pub fn group(&self) -> &str {
         &self.config.group
     }
@@ -175,41 +181,39 @@ impl Consumer {
         // ~ if there's a retry partition ... fetch messages just for
         // that one. Otherwise try to fetch messages for all assigned
         // partitions.
-        match self.state.retry_partitions.pop_front() {
-            Some(tp) => {
-                let s = match self.state.fetch_offsets.get(&tp) {
-                    Some(fstate) => fstate,
-                    None => return (1, Err(Error::Kafka(KafkaCode::UnknownTopicOrPartition))),
-                };
-                let topic = self.state.topic_name(tp.topic_ref);
-                debug!(
-                    "fetching retry messages: (fetch-offset: {{\"{}:{}\": {:?}}})",
-                    topic, tp.partition, s
-                );
-                (
-                    1,
-                    self.client.fetch_messages_for_partition(
-                        &FetchPartition::new(topic, tp.partition, s.offset)
-                            .with_max_bytes(s.max_bytes),
-                    ),
-                )
-            }
-            None => {
-                let client = &mut self.client;
-                let state = &self.state;
-                debug!(
-                    "fetching messages: (fetch-offsets: {:?})",
-                    state.fetch_offsets_debug()
-                );
-                let reqs = state.fetch_offsets.iter().map(|(tp, s)| {
-                    let topic = state.topic_name(tp.topic_ref);
-                    FetchPartition::new(topic, tp.partition, s.offset).with_max_bytes(s.max_bytes)
-                });
-                (
-                    state.fetch_offsets.len() as u32,
-                    client.fetch_messages(reqs),
-                )
-            }
+        if let Some(tp) = self.state.retry_partitions.pop_front() {
+            let Some(fstate) = self.state.fetch_offsets.get(&tp) else {
+                return (1, Err(Error::Kafka(KafkaCode::UnknownTopicOrPartition)))
+            };
+            let topic = self.state.topic_name(tp.topic_ref);
+            log::debug!(
+                "fetching retry messages: (fetch-offset: {{\"{}:{}\": {:?}}})",
+                topic,
+                tp.partition,
+                fstate
+            );
+            (
+                1,
+                self.client.fetch_messages_for_partition(
+                    &FetchPartition::new(topic, tp.partition, fstate.offset)
+                        .with_max_bytes(fstate.max_bytes),
+                ),
+            )
+        } else {
+            let client = &mut self.client;
+            let state = &self.state;
+            log::debug!(
+                "fetching messages: (fetch-offsets: {:?})",
+                state.fetch_offsets_debug()
+            );
+            let reqs = state.fetch_offsets.iter().map(|(tp, s)| {
+                let topic = state.topic_name(tp.topic_ref);
+                FetchPartition::new(topic, tp.partition, s.offset).with_max_bytes(s.max_bytes)
+            });
+            (
+                state.fetch_offsets.len() as u32,
+                client.fetch_messages(reqs),
+            )
         }
     }
 
@@ -268,7 +272,7 @@ impl Consumer {
                         if fetch_state.max_bytes != self.client.fetch_max_bytes_per_partition() {
                             let prev_max_bytes = fetch_state.max_bytes;
                             fetch_state.max_bytes = self.client.fetch_max_bytes_per_partition();
-                            debug!(
+                            log::debug!(
                                 "reset max_bytes for {}:{} from {} to {}",
                                 t.topic(),
                                 tp.partition,
@@ -277,7 +281,7 @@ impl Consumer {
                             );
                         }
                     } else {
-                        debug!(
+                        log::debug!(
                             "no data received for {}:{} (max_bytes: {} / fetch_offset: {} / \
                                 highwatermark_offset: {})",
                             t.topic(),
@@ -302,7 +306,7 @@ impl Consumer {
                                 } else {
                                     fetch_state.max_bytes = incr_max_bytes;
                                 }
-                                debug!(
+                                log::debug!(
                                     "increased max_bytes for {}:{} from {} to {}",
                                     t.topic(),
                                     tp.partition,
@@ -324,7 +328,11 @@ impl Consumer {
                             // (this is just a small optimization)
                             if !single_partition_consumer {
                                 // ~ mark this partition for a retry on its own
-                                debug!("rescheduled for retry: {}:{}", t.topic(), tp.partition);
+                                log::debug!(
+                                    "rescheduled for retry: {}:{}",
+                                    t.topic(),
+                                    tp.partition
+                                );
                                 retry_partitions.push_back(tp)
                             }
                         }
@@ -419,10 +427,10 @@ impl Consumer {
     /// `Consumer::consume_messageset`.
     pub fn commit_consumed(&mut self) -> Result<()> {
         if self.config.group.is_empty() {
-            debug!("commit_consumed: ignoring commit request since no group defined");
+            log::debug!("commit_consumed: ignoring commit request since no group defined");
             return Ok(());
         }
-        debug!(
+        log::debug!(
             "commit_consumed: committing dirty-only consumer offsets (group: {} / offsets: {:?}",
             self.config.group,
             self.state.consumed_offsets_debug()

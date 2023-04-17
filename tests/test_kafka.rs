@@ -86,7 +86,7 @@ mod integration {
         let compression = COMPRESSIONS.get(&*compression).unwrap();
 
         client.set_compression(*compression);
-        debug!("Constructing client: {:?}", client);
+        log::debug!("Constructing client: {:?}", client);
 
         client
     }

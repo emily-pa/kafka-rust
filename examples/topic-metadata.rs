@@ -1,10 +1,11 @@
 use kafka::client::{FetchOffset, KafkaClient};
 use kafka::security::{SaslConfig, TlsConfig};
+use log::Level;
 use std::{cmp, collections::HashMap, env, io, process};
 
 /// Dumps available topic metadata to stdout.
 fn main() {
-    env_logger::init();
+    simple_logger::init_with_level(Level::Debug).unwrap();
 
     let cfg = match Config::from_cmdline() {
         Ok(cfg) => cfg,

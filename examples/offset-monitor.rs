@@ -3,6 +3,7 @@ use kafka::{
     client::{FetchOffset, GroupOffsetStorage, KafkaClient},
     security::{SaslConfig, TlsConfig},
 };
+use log::Level;
 use std::{
     cmp, env,
     io::{stderr, stdout, BufWriter, Write},
@@ -14,7 +15,7 @@ use std::{
 /// the lag for a particular consumer group. Dumps the offset/lag of
 /// the monitored topic/group to stdout every few seconds.
 fn main() {
-    env_logger::init();
+    simple_logger::init_with_level(Level::Debug).unwrap();
 
     macro_rules! abort {
         ($e:expr) => {{

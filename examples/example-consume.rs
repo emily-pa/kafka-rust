@@ -1,12 +1,13 @@
 use kafka::consumer::{Consumer, FetchOffset, GroupOffsetStorage};
 use kafka::error::Error as KafkaError;
+use log::Level;
 
 /// This program demonstrates consuming messages through a `Consumer`.
 /// This is a convenient client that will fit most use cases.  Note
 /// that messages must be marked and committed as consumed to ensure
 /// only once delivery.
 fn main() {
-    env_logger::init();
+    simple_logger::init_with_level(Level::Debug).unwrap();
 
     let broker = "localhost:9092".to_owned();
     let topic = "my-topic".to_owned();

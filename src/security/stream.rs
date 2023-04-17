@@ -1,4 +1,3 @@
-use crate::security::SaslConfig;
 use crate::{security::TlsConfig, Error, Result};
 use std::{
     io::{self, Read, Write},
@@ -33,12 +32,7 @@ pub enum KafkaStream {
 }
 
 impl KafkaStream {
-    pub fn new(
-        host: &str,
-        verify_hostname: bool,
-        sasl_config: SaslConfig,
-        security_config: TlsConfig,
-    ) -> Result<Self> {
+    pub fn new(host: &str, verify_hostname: bool, security_config: TlsConfig) -> Result<Self> {
         let stream = TcpStream::connect(host)?;
         let domain = match host.rfind(':') {
             None => host,
@@ -80,6 +74,7 @@ impl KafkaStream {
         })
     }
 
+    #[must_use]
     pub fn is_secured(&self) -> bool {
         !matches!(self, KafkaStream::Plain(_))
     }
