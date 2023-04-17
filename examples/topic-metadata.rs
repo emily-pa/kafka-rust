@@ -1,4 +1,4 @@
-use kafka::client::{FetchOffset, KafkaClient, SecurityConfig};
+use kafka::client::{FetchOffset, KafkaClient, TlsConfig};
 use std::{cmp, collections::HashMap, env, io, process};
 
 /// Dumps available topic metadata to stdout.
@@ -34,7 +34,7 @@ impl Default for Offsets {
 
 fn dump_metadata(cfg: Config) -> Result<(), String> {
     // ~ establish connection to kafka
-    let mut client = KafkaClient::new(cfg.brokers, false, SecurityConfig::None);
+    let mut client = KafkaClient::new(cfg.brokers, false, TlsConfig::None);
     client.load_metadata_all().map_err(|e| e.to_string())?;
     // ~ determine the list of topics we're supposed to report about
     let topics = if cfg.topics.is_empty() {

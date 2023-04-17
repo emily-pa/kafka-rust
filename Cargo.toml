@@ -25,9 +25,10 @@ openssl = { version = "0.10", optional = true }
 openssl-sys = { version = "0.9", optional = true }
 rustls = { version = "0.21", features = ["dangerous_configuration"], optional = true }
 rustls-pemfile = { version = "1.0", optional = true }
+rustls-webpki = { version = "0.100", optional = true }
+sasl = { version = "0.5", features = ["scram"], optional = true }
 snap = { version = "1.0", optional = true }
 webpki-roots = { version = "0.23", optional = true }
-rustls-webpki = { version = "0.100", optional = true }
 
 [dev-dependencies]
 anyhow = "1.0"
@@ -40,10 +41,11 @@ time = "0.3"
 x509-certificate = "0.19"
 
 [features]
-default = ["snappy", "gzip", "security-rustls"]
+default = ["snappy", "gzip", "security-rustls", "security-sasl"]
 snappy = ["snap"]
 gzip = ["flate2"]
 security-openssl = ["openssl", "openssl-sys"]
 security-rustls = ["rustls", "webpki-roots", "rustls-webpki", "rustls-pemfile"]
+security-sasl = ["sasl"]
 nightly = []
 integration_tests = []

@@ -3,12 +3,12 @@ use std::time::Duration;
 
 use crate::client::{self, FetchOffset, GroupOffsetStorage, KafkaClient};
 use crate::error::{Error, Result};
+use crate::security::{SaslConfig, TlsConfig};
 
 use super::assignment;
 use super::config::Config;
 use super::state::State;
 use super::{Consumer, DEFAULT_FALLBACK_OFFSET, DEFAULT_RETRY_MAX_BYTES_LIMIT};
-use crate::client::SecurityConfig;
 
 /// A Kafka Consumer builder easing the process of setting up various
 /// configuration settings.
@@ -25,7 +25,8 @@ pub struct Builder {
     retry_max_bytes_limit: i32,
     fetch_crc_validation: bool,
     verify_hostname: bool,
-    security_config: SecurityConfig,
+    sasl_config: SaslConfig,
+    security_config: TlsConfig,
     group_offset_storage: GroupOffsetStorage,
     conn_idle_timeout: Duration,
     client_id: Option<String>,
@@ -46,7 +47,8 @@ pub fn new(client: Option<KafkaClient>, hosts: Vec<String>) -> Builder {
         assignments: HashMap::new(),
         fallback_offset: DEFAULT_FALLBACK_OFFSET,
         verify_hostname: false,
-        security_config: SecurityConfig::None,
+        sasl_config: SaslConfig::None,
+        security_config: TlsConfig::None,
         group_offset_storage: client::DEFAULT_GROUP_OFFSET_STORAGE,
         conn_idle_timeout: Duration::from_millis(client::DEFAULT_CONNECTION_IDLE_TIMEOUT_MILLIS),
         client_id: None,
@@ -103,7 +105,7 @@ impl Builder {
 
     /// Specifies the security config to use.
     /// See `KafkaClient::new_secure` for more info.
-    pub fn with_security(mut self, sec: SecurityConfig, verify_hostname: bool) -> Builder {
+    pub fn with_security(mut self, sec: TlsConfig, verify_hostname: bool) -> Builder {
         self.security_config = sec;
         self.verify_hostname = verify_hostname;
         self
@@ -200,9 +202,10 @@ impl Builder {
     fn new_kafka_client(
         hosts: Vec<String>,
         verify_hostname: bool,
-        security: SecurityConfig,
+        sasl_config: SaslConfig,
+        security_config: TlsConfig,
     ) -> KafkaClient {
-        KafkaClient::new(hosts, verify_hostname, security)
+        KafkaClient::new(hosts, verify_hostname, sasl_config, security_config)
     }
 
     /// Finally creates/builds a new consumer based on the so far
@@ -220,7 +223,12 @@ impl Builder {
         let (mut client, need_metadata) = match self.client {
             Some(client) => (client, false),
             None => (
-                Self::new_kafka_client(self.hosts, self.verify_hostname, self.security_config),
+                Self::new_kafka_client(
+                    self.hosts,
+                    self.verify_hostname,
+                    self.sasl_config,
+                    self.security_config,
+                ),
                 true,
             ),
         };

@@ -29,6 +29,7 @@ pub mod consumer;
 pub mod error;
 pub mod producer;
 mod protocol;
+mod security;
 mod utils;
 
 pub use self::error::{Error, Result};

@@ -7,7 +7,7 @@ fn main() {
 
 #[cfg(feature = "security-rustls")]
 mod example {
-    use kafka::client::{FetchOffset, KafkaClient, SecurityConfig};
+    use kafka::client::{FetchOffset, KafkaClient, TlsConfig};
     use rustls::{client::WebPkiVerifier, RootCertStore};
     use std::sync::Arc;
     use std::{env, fs, io::BufReader, process};
@@ -98,7 +98,7 @@ mod example {
         let mut client = KafkaClient::new(
             cfg.brokers,
             cfg.verify_hostname,
-            SecurityConfig::Rustls(rustls_config),
+            TlsConfig::Rustls(rustls_config),
         );
 
         // ~ communicate with the brokers

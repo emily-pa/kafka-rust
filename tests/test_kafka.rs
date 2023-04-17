@@ -20,7 +20,7 @@ extern crate lazy_static;
 
 #[cfg(feature = "integration_tests")]
 mod integration {
-    use kafka::client::{Compression, GroupOffsetStorage, KafkaClient, SecurityConfig};
+    use kafka::client::{Compression, GroupOffsetStorage, KafkaClient, TlsConfig};
     use kafka::Error;
     use std::{collections::HashMap, sync::Arc};
     use x509_certificate::{
@@ -77,7 +77,7 @@ mod integration {
             false,
             new_security_config()
                 .map(|exists| exists.expect("Could not load security configuration"))
-                .unwrap_or(SecurityConfig::None),
+                .unwrap_or(TlsConfig::None),
         );
 
         client.set_group_offset_storage(GroupOffsetStorage::Kafka);
@@ -93,7 +93,7 @@ mod integration {
 
     /// Returns a new security config if the `KAFKA_CLIENT_SECURE`
     /// environment variable is set to a non-empty string.
-    pub(crate) fn new_security_config() -> Option<Result<SecurityConfig, kafka::Error>> {
+    pub(crate) fn new_security_config() -> Option<Result<TlsConfig, kafka::Error>> {
         #[cfg(all(not(feature = "security-openssl"), not(feature = "security-rustls")))]
         {
             return None;
@@ -116,7 +116,7 @@ mod integration {
     #[cfg(feature = "security-rustls")]
     pub(crate) fn get_security_config_rustls(
         (certificate, keypair): (CapturedX509Certificate, InMemorySigningKeyPair),
-    ) -> Result<SecurityConfig, kafka::Error> {
+    ) -> Result<TlsConfig, kafka::Error> {
         let mut root_store = rustls::RootCertStore::empty();
         root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
             rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
@@ -136,7 +136,7 @@ mod integration {
                 rustls::PrivateKey(keypair.private_key_data().unwrap()),
             )
             .unwrap();
-        Ok(SecurityConfig::Rustls(client_config))
+        Ok(TlsConfig::Rustls(client_config))
     }
 
     #[cfg(feature = "security-rustls")]
@@ -148,11 +148,11 @@ mod integration {
     }
 
     /// If the `KAFKA_CLIENT_SECURE` environment variable is set to OPENSSL, return a
-    /// `SecurityConfig`.
+    /// `TlsConfig`.
     #[cfg(feature = "security-openssl")]
     pub(crate) fn get_security_config_openssl(
         keypair: openssl::x509::X509,
-    ) -> Result<SecurityConfig, kafka::Error> {
+    ) -> Result<TlsConfig, kafka::Error> {
         let mut builder =
             openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls()).unwrap();
 
@@ -166,7 +166,7 @@ mod integration {
         builder.set_verify(openssl::ssl::SslVerifyMode::NONE);
 
         let connector = builder.build();
-        let security_config = SecurityConfig::Openssl(connector);
+        let security_config = TlsConfig::Openssl(connector);
         Ok(security_config)
     }
 

@@ -68,12 +68,12 @@ use std::slice::from_ref;
 use std::time::Duration;
 use twox_hash::XxHash32;
 
-use crate::client::SecurityConfig;
 use crate::client_internals::KafkaClientInternals;
 use crate::protocol;
 
 // public re-exports
 pub use crate::client::{Compression, ProduceConfirm, ProducePartitionConfirm, RequiredAcks};
+use crate::security::{SaslConfig, TlsConfig};
 
 /// The default value for `Builder::with_ack_timeout`.
 pub const DEFAULT_ACK_TIMEOUT_MILLIS: u64 = 30 * 1000;
@@ -350,7 +350,8 @@ pub struct Builder<P = DefaultPartitioner> {
     required_acks: RequiredAcks,
     partitioner: P,
     verify_hostname: bool,
-    security_config: SecurityConfig,
+    sasl_config: SaslConfig,
+    security_config: TlsConfig,
     client_id: Option<String>,
 }
 
@@ -367,7 +368,8 @@ impl Builder {
             required_acks: DEFAULT_REQUIRED_ACKS,
             partitioner: DefaultPartitioner::default(),
             verify_hostname: false,
-            security_config: SecurityConfig::None,
+            security_config: TlsConfig::None,
+            sasl_config: SaslConfig::None,
             client_id: None,
         };
         if let Some(ref c) = b.client {
@@ -379,9 +381,15 @@ impl Builder {
 
     /// Specifies the security config to use.
     /// See `KafkaClient::new_secure` for more info.
-    pub fn with_security(mut self, security: SecurityConfig, verify_hostname: bool) -> Self {
+    pub fn with_security(
+        mut self,
+        security: TlsConfig,
+        verify_hostname: bool,
+        sasl_config: SaslConfig,
+    ) -> Self {
         self.security_config = security;
         self.verify_hostname = verify_hostname;
+        self.sasl_config = sasl_config;
         self
     }
 
@@ -439,6 +447,7 @@ impl<P> Builder<P> {
             required_acks: self.required_acks,
             partitioner,
             verify_hostname: self.verify_hostname,
+            sasl_config: self.sasl_config,
             security_config: self.security_config,
             client_id: None,
         }
@@ -447,9 +456,10 @@ impl<P> Builder<P> {
     fn new_kafka_client(
         hosts: Vec<String>,
         verify_hostname: bool,
-        security: SecurityConfig,
+        sasl_config: SaslConfig,
+        security_config: TlsConfig,
     ) -> KafkaClient {
-        KafkaClient::new(hosts, verify_hostname, security)
+        KafkaClient::new(hosts, verify_hostname, sasl_config, security_config)
     }
 
     /// Finally creates/builds a new producer based on the so far
@@ -459,7 +469,12 @@ impl<P> Builder<P> {
         let (mut client, need_metadata) = match self.client {
             Some(client) => (client, false),
             None => (
-                Self::new_kafka_client(self.hosts, self.verify_hostname, self.security_config),
+                Self::new_kafka_client(
+                    self.hosts,
+                    self.verify_hostname,
+                    self.sasl_config,
+                    self.security_config,
+                ),
                 true,
             ),
         };

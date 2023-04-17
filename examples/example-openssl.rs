@@ -12,7 +12,7 @@ mod example {
     use std::env;
     use std::process;
 
-    use self::kafka::client::{FetchOffset, KafkaClient, SecurityConfig};
+    use self::kafka::client::{FetchOffset, KafkaClient, TlsConfig};
 
     use self::openssl::ssl::{SslConnector, SslFiletype, SslMethod, SslVerifyMode};
 
@@ -62,7 +62,7 @@ mod example {
         let mut client = KafkaClient::new(
             cfg.brokers,
             cfg.verify_hostname,
-            SecurityConfig::Openssl(connector),
+            TlsConfig::Openssl(connector),
         );
 
         // ~ communicate with the brokers
