@@ -1,5 +1,8 @@
 use anyhow::{anyhow, Error, Result};
-use kafka::client::{FetchOffset, GroupOffsetStorage, KafkaClient, TlsConfig};
+use kafka::{
+    client::{FetchOffset, GroupOffsetStorage, KafkaClient},
+    security::{SaslConfig, TlsConfig},
+};
 use std::{
     cmp, env,
     io::{stderr, stdout, BufWriter, Write},
@@ -33,7 +36,12 @@ fn main() {
 }
 
 fn run(cfg: Config) -> Result<()> {
-    let mut client = KafkaClient::new(cfg.brokers.clone(), false, TlsConfig::None);
+    let mut client = KafkaClient::new(
+        cfg.brokers.clone(),
+        false,
+        SaslConfig::None,
+        TlsConfig::None,
+    );
     client.set_group_offset_storage(cfg.offset_storage);
     client.load_metadata_all()?;
 

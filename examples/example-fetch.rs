@@ -1,4 +1,7 @@
-use kafka::client::{FetchPartition, KafkaClient, TlsConfig};
+use kafka::{
+    client::{FetchPartition, KafkaClient},
+    security::{SaslConfig, TlsConfig},
+};
 
 /// This program demonstrates the low level api for fetching messages.
 /// Please look at examles/consume.rs for an easier to use API.
@@ -15,7 +18,12 @@ fn main() {
         broker, topic, partition, offset
     );
 
-    let mut client = KafkaClient::new(vec![broker.to_owned()], false, TlsConfig::None);
+    let mut client = KafkaClient::new(
+        vec![broker.to_owned()],
+        false,
+        SaslConfig::None,
+        TlsConfig::None,
+    );
     if let Err(e) = client.load_metadata_all() {
         println!("Failed to load metadata from {}: {}", broker, e);
         return;

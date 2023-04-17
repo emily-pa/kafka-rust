@@ -7,10 +7,12 @@ fn main() {
 
 #[cfg(feature = "security-rustls")]
 mod example {
-    use kafka::client::{FetchOffset, KafkaClient, TlsConfig};
+    use kafka::{
+        client::{FetchOffset, KafkaClient},
+        security::{SaslConfig, TlsConfig},
+    };
     use rustls::{client::WebPkiVerifier, RootCertStore};
-    use std::sync::Arc;
-    use std::{env, fs, io::BufReader, process};
+    use std::{env, fs, io::BufReader, process, sync::Arc};
 
     fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
         let certificate = fs::File::open(filename).expect("cannot open certificate file");
@@ -98,6 +100,7 @@ mod example {
         let mut client = KafkaClient::new(
             cfg.brokers,
             cfg.verify_hostname,
+            SaslConfig::None,
             TlsConfig::Rustls(rustls_config),
         );
 
