@@ -1,4 +1,4 @@
-use kafka::client::{FetchOffset, KafkaClient, TlsConfig};
+use kafka::client::{FetchOffset, KafkaClient};
 use std::{cmp, collections::HashMap, env, io, process};
 
 /// Dumps available topic metadata to stdout.
