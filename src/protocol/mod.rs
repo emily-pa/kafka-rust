@@ -1,10 +1,13 @@
-use std::io::{Read, Write};
-use std::mem;
-use std::time::Duration;
-
-use crate::codecs::{FromByte, ToByte};
-use crate::error::{Error, KafkaCode, Result};
+use crate::{
+    codecs::{FromByte, ToByte},
+    error::{Error, KafkaCode, Result},
+};
 use crc::Crc;
+use std::{
+    io::{Read, Write},
+    mem,
+    time::Duration,
+};
 
 /// Macro to return Result<()> from multiple statements
 macro_rules! try_multi {

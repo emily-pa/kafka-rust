@@ -43,15 +43,17 @@ pub struct Broker {
 }
 
 impl Broker {
-    /// Retrieves the node_id of this broker as identified with the
+    /// Retrieves the `node_id` of this broker as identified with the
     /// remote Kafka cluster.
     #[inline]
+    #[must_use]
     pub fn id(&self) -> i32 {
         self.node_id
     }
 
     /// Retrieves the host:port of the this Kafka broker.
     #[inline]
+    #[must_use]
     pub fn host(&self) -> &str {
         &self.host
     }
@@ -64,34 +66,34 @@ const UNKNOWN_BROKER_INDEX: u32 = u32::MAX;
 /// a `TopicPartition` references a `Broker` indirectly, loosely
 /// through an index, thereby being able to share broker data without
 /// having to fallback to `Rc` or `Arc` or otherwise fighting the
-/// borrowck.
+/// borrow.
 // ~ The value `UNKNOWN_BROKER_INDEX` is artificial and represents an
 // index to an unknown broker (aka the null value.) Code indexing
 // `self.brokers` using a `BrokerRef` _must_ check against this
 // constant and/or treat it conditionally.
 #[derive(Debug, Copy, Clone)]
 pub struct BrokerRef {
-    _index: u32,
+    index: u32,
 }
 
 impl BrokerRef {
     // ~ private constructor on purpose
     fn new(index: u32) -> Self {
-        BrokerRef { _index: index }
+        BrokerRef { index }
     }
 
-    fn index(&self) -> usize {
-        self._index as usize
+    fn index(self) -> usize {
+        self.index as usize
     }
 
     fn set(&mut self, other: BrokerRef) {
-        if self._index != other._index {
-            self._index = other._index;
+        if self.index != other.index {
+            self.index = other.index;
         }
     }
 
     fn set_unknown(&mut self) {
-        self.set(BrokerRef::new(UNKNOWN_BROKER_INDEX))
+        self.set(BrokerRef::new(UNKNOWN_BROKER_INDEX));
     }
 }
 
@@ -125,7 +127,7 @@ impl TopicPartitions {
     }
 
     pub fn partition(&self, partition_id: i32) -> Option<&TopicPartition> {
-        self.partitions.get(partition_id as usize)
+        self.partitions.get(partition_id.unsigned_abs() as usize)
     }
 
     pub fn iter(&self) -> TopicPartitionIter<'_> {
@@ -301,11 +303,11 @@ impl ClientState {
             };
             // ~ sync the partitions vector with the new information
             for partition in t.partitions {
-                let tp = &mut tps[partition.id as usize];
+                let tp = &mut tps[partition.id.unsigned_abs() as usize];
                 if let Some(bref) = brokers.get(&partition.leader) {
-                    tp.broker.set(*bref)
+                    tp.broker.set(*bref);
                 } else {
-                    tp.broker.set_unknown()
+                    tp.broker.set_unknown();
                 }
             }
         }
@@ -342,7 +344,9 @@ impl ClientState {
                         host: broker_host,
                     });
                     // ~ track the pushed broker's index
-                    e.insert(BrokerRef::new(new_index as u32));
+                    e.insert(BrokerRef::new(
+                        u32::try_from(new_index).expect("new_index is out of bounds for u32"),
+                    ));
                 }
             }
         }
@@ -389,21 +393,22 @@ impl ClientState {
                         group_host, broker.host, broker.node_id
                     );
                 }
-                broker_ref._index = i;
+                broker_ref.index = i;
                 break;
             }
         }
         // ~ if not found, add it to the list of known brokers
-        if broker_ref._index == UNKNOWN_BROKER_INDEX {
-            broker_ref._index = self.brokers.len() as u32;
+        if broker_ref.index == UNKNOWN_BROKER_INDEX {
+            broker_ref.index =
+                u32::try_from(self.brokers.len()).expect("self.brokers is out of bounds for u32");
             self.brokers.push(Broker {
                 node_id: gc.broker_id,
                 host: group_host,
             });
         }
         if let Some(br) = self.group_coordinators.get_mut(group) {
-            if br._index != broker_ref._index {
-                br._index = broker_ref._index;
+            if br.index != broker_ref.index {
+                br.index = broker_ref.index;
             }
         }
         self.group_coordinators.insert(group.to_owned(), broker_ref);

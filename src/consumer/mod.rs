@@ -546,13 +546,13 @@ impl<'a> Iterator for MessageSetsIter<'a> {
                         let msgs = pdata.messages();
                         if msgs.is_empty() {
                             continue;
-                        } else {
-                            return Some(MessageSet {
-                                topic: self.curr_topic,
-                                partition: p.partition(),
-                                messages: msgs,
-                            });
                         }
+
+                        return Some(MessageSet {
+                            topic: self.curr_topic,
+                            partition: p.partition(),
+                            messages: msgs,
+                        });
                     }
                 }
             }

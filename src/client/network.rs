@@ -60,6 +60,7 @@ impl Config {
             host,
             self.rw_timeout,
             self.verify_hostname,
+            self.sasl_config.clone(),
             self.security_config.clone(),
         )
         .map(|c| {
@@ -209,8 +210,8 @@ impl KafkaConnection {
         r
     }
 
-    pub fn read_exact_alloc(&mut self, size: u64) -> Result<Vec<u8>> {
-        let mut buffer = vec![0; size as usize];
+    pub fn read_exact_alloc(&mut self, size: usize) -> Result<Vec<u8>> {
+        let mut buffer = vec![0; size];
         self.read_exact(buffer.as_mut_slice())?;
         Ok(buffer)
     }
@@ -241,9 +242,10 @@ impl KafkaConnection {
         host: &str,
         rw_timeout: Option<Duration>,
         verify_hostname: bool,
+        sasl_config: SaslConfig,
         security_config: TlsConfig,
     ) -> Result<KafkaConnection> {
-        let stream = KafkaStream::new(host, verify_hostname, security_config)?;
+        let stream = KafkaStream::new(host, verify_hostname, sasl_config, security_config)?;
         KafkaConnection::from_stream(stream, id, host, rw_timeout)
     }
 }

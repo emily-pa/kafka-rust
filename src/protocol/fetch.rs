@@ -231,8 +231,8 @@ impl<'a> Topic<'a> {
         validate_crc: bool,
     ) -> Result<Topic<'a>> {
         let name = r.read_str()?;
-        let preqs = reqs.and_then(|reqs| reqs.get(name));
-        let partitions = array_of!(r, Partition::read(r, preqs, validate_crc));
+        let partition_request = reqs.and_then(|reqs| reqs.get(name));
+        let partitions = array_of!(r, Partition::read(r, partition_request, validate_crc));
         Ok(Topic {
             topic: name,
             partitions,
@@ -272,12 +272,12 @@ pub struct Partition<'a> {
 impl<'a> Partition<'a> {
     fn read(
         r: &mut ZReader<'a>,
-        preqs: Option<&TopicPartitionFetchRequest>,
+        partition_request: Option<&TopicPartitionFetchRequest>,
         validate_crc: bool,
     ) -> Result<Partition<'a>> {
         let partition = r.read_i32()?;
-        let proffs = preqs
-            .and_then(|preqs| preqs.get(partition))
+        let proffs = partition_request
+            .and_then(|partition_request| partition_request.get(partition))
             .map(|preq| preq.offset)
             .unwrap_or(0);
 

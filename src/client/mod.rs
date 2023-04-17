@@ -69,7 +69,7 @@ pub const DEFAULT_RETRY_BACKOFF_TIME_MILLIS: u64 = 100;
 /// The default value for `KafkaClient::set_retry_max_attempts(..)`
 // the default value: re-attempt a repeatable operation for
 // approximetaly up to two minutes
-pub const DEFAULT_RETRY_MAX_ATTEMPTS: u32 = 120_000 / DEFAULT_RETRY_BACKOFF_TIME_MILLIS as u32;
+pub const DEFAULT_RETRY_MAX_ATTEMPTS: u64 = 120_000 / DEFAULT_RETRY_BACKOFF_TIME_MILLIS;
 
 /// The default value for `KafkaClient::set_connection_idle_timeout(..)`
 pub const DEFAULT_CONNECTION_IDLE_TIMEOUT_MILLIS: u64 = 540_000;
@@ -116,7 +116,7 @@ struct ClientConfig {
     retry_backoff_time: Duration,
     // ~ the number of repeated retry attempts; prevents endless
     // repetition of a retry attempt
-    retry_max_attempts: u32,
+    retry_max_attempts: u64,
 }
 
 // --------------------------------------------------------------------
@@ -189,6 +189,7 @@ pub struct FetchGroupOffset<'a> {
 
 impl<'a> FetchGroupOffset<'a> {
     #[inline]
+    #[must_use]
     pub fn new(topic: &'a str, partition: i32) -> Self {
         FetchGroupOffset { topic, partition }
     }
@@ -216,11 +217,12 @@ pub struct CommitOffset<'a> {
 }
 
 impl<'a> CommitOffset<'a> {
+    #[must_use]
     pub fn new(topic: &'a str, partition: i32, offset: i64) -> Self {
         CommitOffset {
+            offset,
             topic,
             partition,
-            offset,
         }
     }
 }
@@ -281,6 +283,7 @@ impl<'a, 'b> AsRef<ProduceMessage<'a, 'b>> for ProduceMessage<'a, 'b> {
 impl<'a, 'b> ProduceMessage<'a, 'b> {
     /// A convenient constructor method to create a new produce
     /// message with all attributes specified.
+    #[must_use]
     pub fn new(
         topic: &'a str,
         partition: i32,
@@ -324,6 +327,7 @@ pub struct FetchPartition<'a> {
 impl<'a> FetchPartition<'a> {
     /// Creates a new "fetch messages" request structure with an
     /// unspecified `max_bytes`.
+    #[must_use]
     pub fn new(topic: &'a str, partition: i32, offset: i64) -> Self {
         FetchPartition {
             topic,
@@ -334,6 +338,7 @@ impl<'a> FetchPartition<'a> {
     }
 
     /// Sets the `max_bytes` value for the "fetch messages" request.
+    #[must_use]
     pub fn with_max_bytes(mut self, max_bytes: i32) -> Self {
         self.max_bytes = max_bytes;
         self
@@ -372,7 +377,7 @@ pub struct ProducePartitionConfirm {
 // --------------------------------------------------------------------
 
 impl KafkaClient {
-    /// Creates a new secure instance of KafkaClient. Before being able to
+    /// Creates a new secure instance of `KafkaClient`. Before being able to
     /// successfully use the new client, you'll have to load metadata.
     ///
     /// # Examples
@@ -411,9 +416,10 @@ impl KafkaClient {
     /// See also `KafkaClient::load_metadatata_all` and
     /// `KafkaClient::load_metadata` methods, the creates
     /// [openssl](https://crates.io/crates/openssl)
-    /// and [openssl_verify](https://crates.io/crates/openssl-verify),
+    /// and [`openssl_verify`](https://crates.io/crates/openssl-verify),
     /// as well as
     /// [Kafka's documentation](https://kafka.apache.org/documentation.html#security_ssl).
+    #[must_use]
     pub fn new(
         hosts: Vec<String>,
         verify_hostname: bool,
@@ -452,11 +458,12 @@ impl KafkaClient {
     /// cluster.  This set of hosts corresponds to the values supplied
     /// to `KafkaClient::new`.
     #[inline]
+    #[must_use]
     pub fn hosts(&self) -> &[String] {
         &self.config.hosts
     }
 
-    /// Sets the client_id to be sent along every request to the
+    /// Sets the `client_id` to be sent along every request to the
     /// remote Kafka brokers.  By default, this value is the empty
     /// string.
     ///
@@ -467,6 +474,7 @@ impl KafkaClient {
     }
 
     /// Retrieves the current `KafkaClient::set_client_id` setting.
+    #[must_use]
     pub fn client_id(&self) -> &str {
         &self.config.client_id
     }
@@ -489,6 +497,7 @@ impl KafkaClient {
 
     /// Retrieves the current `KafkaClient::set_compression` setting.
     #[inline]
+    #[must_use]
     pub fn compression(&self) -> Compression {
         self.config.compression
     }
@@ -498,6 +507,8 @@ impl KafkaClient {
     ///
     /// See also `KafkaClient::set_fetch_min_bytes(..)` and
     /// `KafkaClient::set_fetch_max_bytes_per_partition(..)`.
+    /// # Errors
+    /// Will return an `InvalidDuration` if `max_wait_time` is out of bounds
     #[inline]
     pub fn set_fetch_max_wait_time(&mut self, max_wait_time: Duration) -> Result<()> {
         self.config.fetch_max_wait_time = protocol::to_millis_i32(max_wait_time)?;
@@ -507,8 +518,9 @@ impl KafkaClient {
     /// Retrieves the current `KafkaClient::set_fetch_max_wait_time`
     /// setting.
     #[inline]
+    #[must_use]
     pub fn fetch_max_wait_time(&self) -> Duration {
-        Duration::from_millis(self.config.fetch_max_wait_time as u64)
+        Duration::from_millis(u64::from(self.config.fetch_max_wait_time.unsigned_abs()))
     }
 
     /// Sets the minimum number of bytes of available data to wait for
@@ -518,7 +530,7 @@ impl KafkaClient {
     /// By setting higher values in combination with the timeout the
     /// consumer can tune for throughput and trade a little additional
     /// latency for reading only large chunks of data (e.g. setting
-    /// MaxWaitTime to 100 ms and setting MinBytes to 64k would allow
+    /// `MaxWaitTime` to 100 ms and setting `MinBytes` to 64k would allow
     /// the server to wait up to 100ms to try to accumulate 64k of
     /// data before responding).
     ///
@@ -545,6 +557,7 @@ impl KafkaClient {
     /// Retrieves the current `KafkaClient::set_fetch_min_bytes`
     /// setting.
     #[inline]
+    #[must_use]
     pub fn fetch_min_bytes(&self) -> i32 {
         self.config.fetch_min_bytes
     }
@@ -577,6 +590,7 @@ impl KafkaClient {
     /// Retrieves the current
     /// `KafkaClient::set_fetch_max_bytes_per_partition` setting.
     #[inline]
+    #[must_use]
     pub fn fetch_max_bytes_per_partition(&self) -> i32 {
         self.config.fetch_max_bytes_per_partition
     }
@@ -595,6 +609,7 @@ impl KafkaClient {
     /// Retrieves the current `KafkaClient::set_fetch_crc_validation`
     /// setting.
     #[inline]
+    #[must_use]
     pub fn fetch_crc_validation(&self) -> bool {
         self.config.fetch_crc_validation
     }
@@ -622,6 +637,7 @@ impl KafkaClient {
 
     /// Retrieves the current `KafkaClient::set_group_offset_storage`
     /// settings.
+    #[must_use]
     pub fn group_offset_storage(&self) -> GroupOffsetStorage {
         // ~ only protocol V0 is zookeeper
         let zkv = GroupOffsetStorage::Zookeeper.offset_fetch_version();
@@ -642,6 +658,7 @@ impl KafkaClient {
 
     /// Retrieves the current `KafkaClient::set_retry_backoff_time`
     /// setting.
+    #[must_use]
     pub fn retry_backoff_time(&self) -> Duration {
         self.config.retry_backoff_time
     }
@@ -650,14 +667,15 @@ impl KafkaClient {
     /// repeatable operations against kafka.  This avoids retrying
     /// them forever.
     #[inline]
-    pub fn set_retry_max_attempts(&mut self, attempts: u32) {
+    pub fn set_retry_max_attempts(&mut self, attempts: u64) {
         self.config.retry_max_attempts = attempts;
     }
 
     /// Retrieves the current `KafkaClient::set_retry_max_attempts`
     /// setting.
     #[inline]
-    pub fn retry_max_attempts(&self) -> u32 {
+    #[must_use]
+    pub fn retry_max_attempts(&self) -> u64 {
         self.config.retry_max_attempts
     }
 
@@ -675,6 +693,7 @@ impl KafkaClient {
     /// Retrieves the current
     /// `KafkaClient::set_connection_idle_timeout` setting.
     #[inline]
+    #[must_use]
     pub fn connection_idle_timeout(&self) -> Duration {
         self.conn_pool.idle_timeout()
     }
@@ -698,6 +717,7 @@ impl KafkaClient {
     /// }
     /// ```
     #[inline]
+    #[must_use]
     pub fn topics(&self) -> metadata::Topics<'_> {
         metadata::Topics::new(self)
     }
@@ -717,6 +737,10 @@ impl KafkaClient {
     ///
     /// Returns the metadata for all loaded topics underlying this
     /// client.
+    ///
+    /// # Errors
+    /// Will return `Error` if failed to connect or failed to fetch metadata.
+    /// May return `NoHostReachable`
     #[inline]
     pub fn load_metadata_all(&mut self) -> Result<()> {
         self.reset_metadata();
@@ -746,6 +770,10 @@ impl KafkaClient {
     /// Returns the metadata for _all_ loaded topics underlying this
     /// client (this might be more topics than specified right to this
     /// method call.)
+    ///
+    /// # Errors
+    /// Will return `Error` if failed to connect or failed to fetch metadata.
+    /// May return `NoHostReachable`
     #[inline]
     pub fn load_metadata<T: AsRef<str>>(&mut self, topics: &[T]) -> Result<()> {
         let resp = self.fetch_metadata(topics)?;
@@ -798,7 +826,7 @@ impl KafkaClient {
     /// ```no_run
     /// use kafka::client::KafkaClient;
     ///
-    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, TlsConfig::None);
+    /// let mut client = KafkaClient::new(vec!["localhost:9092".to_owned()], false, SaslConfig::None, TlsConfig::None);
     /// client.load_metadata_all().unwrap();
     /// let topics: Vec<String> = client.topics().names().map(ToOwned::to_owned).collect();
     /// let offsets = client.fetch_offsets(&topics, kafka::client::FetchOffset::Latest).unwrap();
@@ -806,6 +834,9 @@ impl KafkaClient {
     ///
     /// Returns a mapping of topic name to `PartitionOffset`s for each
     /// currently available partition of the corresponding topic.
+    ///
+    /// # Errors
+    /// Will return `Error` on OpenSSL or Rustls error
     pub fn fetch_offsets<T: AsRef<str>>(
         &mut self,
         topics: &[T],
@@ -837,12 +868,13 @@ impl KafkaClient {
 
         // Call each broker with the request formed earlier
         let now = Instant::now();
-        let mut res: HashMap<String, Vec<PartitionOffset>> = HashMap::with_capacity(n_topics);
+        let mut topics_map: HashMap<String, Vec<PartitionOffset>> =
+            HashMap::with_capacity(n_topics);
         for (host, req) in reqs {
             let resp =
                 __send_receive::<_, protocol::OffsetResponse>(&mut self.conn_pool, host, now, req)?;
             for tp in resp.topic_partitions {
-                let mut entry = res.entry(tp.topic);
+                let mut entry = topics_map.entry(tp.topic);
                 let mut new_resp_offsets = None;
                 let mut err = None;
                 // Use an explicit scope here to allow insertion into a vacant entry
@@ -883,15 +915,15 @@ impl KafkaClient {
                 if let hash_map::Entry::Vacant(e) = entry {
                     // unwrap is ok because if it is Vacant, it would have
                     // been made into a Some above
-                    e.insert(new_resp_offsets.unwrap());
+                    e.insert(new_resp_offsets.expect("Should not be reachable"));
                 }
             }
         }
 
-        Ok(res)
+        Ok(topics_map)
     }
 
-    /// Takes ownership back from the given HashMap Entry.
+    /// Takes ownership back from the given `HashMap` Entry.
     fn get_key_from_entry<'a, K: 'a, V: 'a>(entry: hash_map::Entry<'a, K, V>) -> K {
         match entry {
             hash_map::Entry::Occupied(e) => e.remove_entry().0,
@@ -1491,15 +1523,15 @@ fn __fetch_messages(
     reqs: HashMap<&str, protocol::FetchRequest<'_, '_>>,
 ) -> Result<Vec<fetch::Response>> {
     let now = Instant::now();
-    let mut res = Vec::with_capacity(reqs.len());
+    let mut responses = Vec::with_capacity(reqs.len());
     for (host, req) in reqs {
         let p = protocol::fetch::ResponseParser {
             validate_crc: config.fetch_crc_validation,
             requests: Some(&req),
         };
-        res.push(__z_send_receive(conn_pool, host, now, &req, &p)?);
+        responses.push(__z_send_receive(conn_pool, host, now, &req, &p)?);
     }
-    Ok(res)
+    Ok(responses)
 }
 
 /// ~ carries out the given produce requests and returns the response
@@ -1515,14 +1547,14 @@ fn __produce_messages(
         }
         Ok(vec![])
     } else {
-        let mut res: Vec<ProduceConfirm> = vec![];
+        let mut responses: Vec<ProduceConfirm> = vec![];
         for (host, req) in reqs {
             let resp = __send_receive::<_, protocol::ProduceResponse>(conn_pool, host, now, req)?;
             for tpo in resp.get_response() {
-                res.push(tpo);
+                responses.push(tpo);
             }
         }
-        Ok(res)
+        Ok(responses)
     }
 }
 
@@ -1581,7 +1613,7 @@ fn __send_request<T: ToByte>(conn: &mut network::KafkaConnection, request: T) ->
 
 fn __get_response<T: FromByte>(conn: &mut network::KafkaConnection) -> Result<T::R> {
     let size = __get_response_size(conn)?;
-    let resp = conn.read_exact_alloc(size as u64)?;
+    let resp = conn.read_exact_alloc(size as usize)?;
 
     trace!("__get_response: received bytes: {:?}", &resp);
 
@@ -1621,7 +1653,7 @@ where
     P: ResponseParser,
 {
     let size = __get_response_size(conn)?;
-    let resp = conn.read_exact_alloc(size as u64)?;
+    let resp = conn.read_exact_alloc(size as usize)?;
 
     // {
     //     use std::fs::OpenOptions;
