@@ -185,12 +185,8 @@ pub fn to_millis_i32(d: Duration) -> Result<i32> {
     let m = d
         .as_secs()
         .saturating_mul(1_000)
-        .saturating_add(d.subsec_millis() as u64);
-    if m > i32::MAX as u64 {
-        Err(Error::InvalidDuration)
-    } else {
-        Ok(m as i32)
-    }
+        .saturating_add(u64::from(d.subsec_millis()));
+    i32::try_from(m).map_err(|_| Error::InvalidDuration)
 }
 
 #[test]

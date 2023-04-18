@@ -133,7 +133,7 @@ impl<'a> SnappyReader<'a> {
         let chunk_size = next_i32!(self.compressed_data);
         if chunk_size <= 0 {
             return Err(Error::InvalidSnappy(snap::Error::UnsupportedChunkLength {
-                len: chunk_size as u64,
+                len: chunk_size.unsigned_abs() as u64,
                 header: false,
             }));
         }

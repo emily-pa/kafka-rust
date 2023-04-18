@@ -1623,7 +1623,7 @@ fn __send_request<T: ToByte>(conn: &mut network::KafkaConnection, request: T) ->
     // ~ encode the request data
     request.encode(&mut buffer)?;
     // ~ put the size of the request data into the reserved area
-    let size = buffer.len() as i32 - 4;
+    let size = i32::try_from(buffer.len() - 4).map_err(|_| Error::NumberConversionError)?;
     size.encode(&mut &mut buffer[..])?;
 
     log::trace!("__send_request: Sending bytes: {:?}", &buffer);

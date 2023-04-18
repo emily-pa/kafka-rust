@@ -67,6 +67,10 @@ pub enum Error {
     #[error("String decoding error")]
     StringDecodeError,
 
+    /// Failure to decode a number, usually due to signed-unsigned conversion
+    #[error("NumberConversionError")]
+    NumberConversionError,
+
     /// Unable to reach any host
     #[error("No host reachable")]
     NoHostReachable,

@@ -66,15 +66,10 @@ impl<'a> ZReader<'a> {
     /// Reads a string as defined by the Kafka Protocol. The 'null'
     /// string is delivered as the empty string.
     pub fn read_str<'b>(&'b mut self) -> Result<&'a str> {
-        let len = self.read_i16()?;
-        if len <= 0 {
-            Ok(EMPTY_STR)
+        if let Ok(len) = usize::try_from(self.read_i16()?) {
+            str::from_utf8(self.read(len)?).map_err(|_| Error::StringDecodeError)
         } else {
-            // alternatively: str::from_utf8_unchecked(..)
-            match str::from_utf8(self.read(len as usize)?) {
-                Ok(s) => Ok(s),
-                Err(_) => Err(Error::StringDecodeError),
-            }
+            Ok(EMPTY_STR)
         }
     }
 
@@ -93,8 +88,7 @@ impl<'a> ZReader<'a> {
     /// Protocol. The size of 'null' array will be returned as the
     /// size an array of an empty array.
     pub fn read_array_len(&mut self) -> Result<usize> {
-        let len = self.read_i32()?;
-        Ok(if len < 0 { 0 } else { len as usize })
+        usize::try_from(self.read_i32()?).map_err(|_| Error::NumberConversionError)
     }
 }
 
